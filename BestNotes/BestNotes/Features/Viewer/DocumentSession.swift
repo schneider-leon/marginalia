@@ -64,6 +64,14 @@ enum PageDisplayMode: String, CaseIterable, Identifiable {
 
 // MARK: - Fehler
 
+/// Woher der Inhalt einer Session stammt und wohin gesichert wird.
+enum DocumentBacking {
+    /// Eigenstaendige PDF in der Bibliothek.
+    case pdfFile(URL)
+    /// Notizbuch — gesichert wird ins Paket, nicht in eine lose PDF.
+    case notebook(NotebookPackage)
+}
+
 enum DocumentSessionError: LocalizedError {
     case unreadablePDF(URL)
 
@@ -92,8 +100,12 @@ struct PendingComment: Identifiable {
 @Observable
 final class DocumentSession: Identifiable {
     let id = UUID()
-    let url: URL
+    let backing: DocumentBacking
     let document: PDFDocument
+
+    /// Der Name aus der Bibliothek — dort ist er massgeblich, `info.json`
+    /// bekommt ihn beim naechsten Sichern nachgereicht.
+    var displayName: String
 
     /// Vom Nutzer steuerbar, wird in `updateNSView` an die `PDFView` gespiegelt.
     var displayMode: PageDisplayMode = .singlePageContinuous
@@ -115,36 +127,47 @@ final class DocumentSession: Identifiable {
     @ObservationIgnored
     let undoManager = UndoManager()
 
-    @ObservationIgnored
-    private let access: SecurityScopedAccess
-
     /// Nur da, damit SwiftUI die Undo-Buttons neu bewertet — der UndoManager
     /// selbst ist nicht observierbar.
     private(set) var editRevision = 0
 
-    var displayName: String { url.deletingPathExtension().lastPathComponent }
+    var url: URL {
+        switch backing {
+        case .pdfFile(let url): url
+        case .notebook(let package): package.url
+        }
+    }
+
+    var notebook: NotebookPackage? {
+        if case .notebook(let package) = backing { package } else { nil }
+    }
+
     var pageCount: Int { document.pageCount }
     var canGoToNextPage: Bool { currentPageIndex + 1 < pageCount }
     var canGoToPreviousPage: Bool { currentPageIndex > 0 }
     var canUndo: Bool { _ = editRevision; return undoManager.canUndo }
     var canRedo: Bool { _ = editRevision; return undoManager.canRedo }
 
-    init(url: URL) throws {
-        let access = SecurityScopedAccess(url: url)
+    init(pdfAt url: URL, name: String) throws {
         guard let document = PDFDocument(url: url) else {
-            access.release()
             throw DocumentSessionError.unreadablePDF(url)
         }
-        self.url = url
+        self.backing = .pdfFile(url)
         self.document = document
-        self.access = access
+        self.displayName = name
+        undoManager.levelsOfUndo = 100
+    }
+
+    init(package: NotebookPackage, name: String) {
+        self.backing = .notebook(package)
+        self.document = package.pdf
+        self.displayName = name
         undoManager.levelsOfUndo = 100
     }
 
     func close() {
         commandTarget = nil
         undoManager.removeAllActions()
-        access.release()
     }
 
     // MARK: Navigation & Zoom (SwiftUI/Menue -> PDFView)
@@ -271,9 +294,16 @@ final class DocumentSession: Identifiable {
 
     // MARK: Speichern & Export
 
-    /// Schreibt zurueck in die geoeffnete Datei.
+    /// Schreibt zurueck — in die PDF-Datei oder ins Notizbuchpaket.
     func save() throws {
-        try PDFExportService.write(document, to: url)
+        switch backing {
+        case .pdfFile(let url):
+            try PDFExportService.write(document, to: url)
+        case .notebook(let package):
+            package.setTitle(displayName)
+            package.markPDFDirty()
+            try package.write()
+        }
         hasUnsavedChanges = false
     }
 

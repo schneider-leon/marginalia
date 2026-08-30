@@ -178,6 +178,11 @@ struct ViewerFailure: Identifiable {
     let message: String
     let suggestion: String?
 
+    init(message: String, suggestion: String?) {
+        self.message = message
+        self.suggestion = suggestion
+    }
+
     init(error: Error) {
         let localized = error as? LocalizedError
         message = localized?.errorDescription ?? error.localizedDescription

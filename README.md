@@ -142,12 +142,21 @@ Der Nutzer bekommt eine flache, ueberall lesbare PDF; die Arbeitskopie bleibt ed
 
 ### 5. SwiftData ist der Index, nicht der Speicher
 
-SwiftData haelt nur die Bibliotheksstruktur: Ordner, Notizbuch-Eintraege, Titel,
-Zeitstempel, Sortierung, zuletzt geoeffnete Tabs. Der Inhalt bleibt im Dateisystem.
-Damit gilt: eine kaputte oder migrierte Datenbank kostet nie Notizen, und ein
-Notizbuch laesst sich per Drag & Drop aus dem Finder weitergeben. Referenziert wird
-ueber **security-scoped bookmarks** (Sandbox-tauglich, ueberlebt Umbenennen/Verschieben)
-mit dem Pfad als Fallback.
+`LibraryEntry` haelt nur die Bibliotheksstruktur: Name, Art, Ordnung, Elternschaft,
+Zeitstempel. Der Inhalt bleibt im Dateisystem. Damit kostet eine kaputte oder
+migrierte Datenbank nie Notizen.
+
+Referenziert wird ueber die **`id` des Eintrags**, nicht ueber gespeicherte Pfade:
+ein Eintrag findet seine Datei als `Library/<id>.bestnote` bzw. `Library/<id>.pdf`.
+Keine Bookmarks, keine toten Pfade.
+
+**Importierte PDFs werden kopiert, nicht verknuepft.** Die Bibliothek besitzt ihre
+Dokumente selbst. Das erspart security-scoped bookmarks samt Entitlement, ueberlebt
+Verschieben und Umbenennen des Originals, und Annotationen landen in der Kopie statt
+in der Datei des Nutzers. Preis: doppelter Speicherplatz.
+
+`LibraryStore` ist die Fassade davor und liefert den Views weiterhin nur einen Baum
+aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 
 ---
 
@@ -161,7 +170,7 @@ mit dem Pfad als Fallback.
 | 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | ✅ |
 | 5 | Tab-Leiste fuer mehrere offene Dokumente | ✅ |
 | 6a | `.bestnote`-Format: Lesen, Schreiben, Reparatur | ✅ |
-| 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | offen |
+| 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | ✅ |
 | 7 | Leere Seiten, Textoverlays, Einbrennen beim Export | offen |
 | 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | offen |
 | 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |

@@ -9,6 +9,8 @@ struct LibrarySidebar: View {
     let store: LibraryStore
     @Binding var selection: UUID?
 
+    let onCreateFolder: (UUID?) -> UUID?
+    let onCreateNotebook: (UUID?) -> UUID?
     let onImportPDF: (UUID?) -> Void
     let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
@@ -25,6 +27,15 @@ struct LibrarySidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .overlay {
+            if store.roots.isEmpty {
+                ContentUnavailableView {
+                    Label("Bibliothek ist leer", systemImage: "books.vertical")
+                } description: {
+                    Text("Lege ein Notizbuch an oder importiere eine PDF.")
+                }
+            }
+        }
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
@@ -85,17 +96,15 @@ struct LibrarySidebar: View {
     // MARK: - Aktionen
 
     private func addFolder(into parent: UUID?) {
-        let node = LibraryNode.folder("Neuer Ordner")
-        store.insert(node, into: parent)
-        selection = node.id
-        renaming = RenameRequest(id: node.id, name: node.name)
+        guard let id = onCreateFolder(parent) else { return }
+        selection = id
+        renaming = RenameRequest(id: id, name: "Neuer Ordner")
     }
 
     private func addNotebook(into parent: UUID?) {
-        let node = LibraryNode.notebook("Neues Notizbuch")
-        store.insert(node, into: parent)
-        selection = node.id
-        renaming = RenameRequest(id: node.id, name: node.name)
+        guard let id = onCreateNotebook(parent) else { return }
+        selection = id
+        renaming = RenameRequest(id: id, name: "Neues Notizbuch")
     }
 
     // MARK: - Umbenennen

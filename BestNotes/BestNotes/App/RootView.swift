@@ -9,12 +9,15 @@
 //  sonst muesste jede Auswahl entscheiden, ob sie den Tab-Stapel ueberschreibt.
 //
 
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct RootView: View {
+    let library: LibraryStore
+    var startupWarning: String? = nil
+
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
-    @State private var library = LibraryStore()
     @State private var tabs = TabsStore()
     @State private var selection: UUID?
 
@@ -28,6 +31,8 @@ struct RootView: View {
             LibrarySidebar(
                 store: library,
                 selection: $selection,
+                onCreateFolder: createFolder(in:),
+                onCreateNotebook: createNotebook(in:),
                 onImportPDF: presentImporter(into:),
                 onRename: rename(id:to:),
                 onDelete: delete(id:)
@@ -50,6 +55,7 @@ struct RootView: View {
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
+        .task { showStartupWarningIfNeeded() }
         .onChange(of: selection) { openSelectedNode() }
         .onChange(of: tabs.activeID) { syncSelectionToActiveTab() }
         .alert(item: $failure) { failure in
@@ -108,8 +114,8 @@ struct RootView: View {
 
     private func placeholderMessage(for kind: LibraryNode.Kind) -> String {
         switch kind {
-        case .notebook: "Notizbuecher bekommen ihr eigenes Format in Schritt 6."
-        case .pdf: "Testeintrag ohne hinterlegte Datei — importiere eine echte PDF, um sie zu oeffnen."
+        case .notebook: "Das Notizbuchpaket konnte nicht geoeffnet werden."
+        case .pdf: "Die Datei zu diesem Eintrag fehlt in der Bibliothek."
         case .folder: ""
         }
     }
@@ -145,28 +151,61 @@ struct RootView: View {
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
+        let target = importTarget
+        importTarget = nil
+
         switch result {
         case .success(let urls):
             var lastID: UUID?
             for url in urls {
-                let node = LibraryNode.pdf(url.deletingPathExtension().lastPathComponent, url: url)
-                library.insert(node, into: importTarget)
-                lastID = node.id
+                do {
+                    lastID = try library.importPDF(
+                        from: url,
+                        name: url.deletingPathExtension().lastPathComponent,
+                        in: target
+                    )
+                } catch {
+                    failure = ViewerFailure(error: error)
+                }
             }
-            importTarget = nil
             if let lastID { selection = lastID }
         case .failure(let error):
-            importTarget = nil
             failure = ViewerFailure(error: error)
         }
+    }
+
+    // MARK: - Anlegen
+
+    private func createFolder(in parent: UUID?) -> UUID? {
+        library.createFolder(name: "Neuer Ordner", in: parent)
+    }
+
+    private func createNotebook(in parent: UUID?) -> UUID? {
+        do {
+            return try library.createNotebook(name: "Neues Notizbuch", in: parent)
+        } catch {
+            failure = ViewerFailure(error: error)
+            return nil
+        }
+    }
+
+    private func showStartupWarningIfNeeded() {
+        guard let startupWarning, failure == nil else { return }
+        failure = ViewerFailure(message: startupWarning, suggestion: nil)
     }
 
     // MARK: - Bibliothek aendern
 
     private func rename(id: UUID, to name: String) {
         library.rename(id: id, to: name)
-        if let updated = library.node(id: id) {
+        guard let updated = library.node(id: id) else { return }
+
+        if tabs.isOpen(id) {
+            // Die offene Session ist die einzige Schreiberin auf dem Paket;
+            // sie zieht den Titel beim naechsten Sichern nach.
             tabs.rename(id: id, to: updated.name)
+        } else if updated.kind == .notebook {
+            library.syncNotebookTitle(id: id, to: updated.name)
         }
     }
 
@@ -223,5 +262,9 @@ struct RootView: View {
 }
 
 #Preview {
-    RootView()
+    let container = try! ModelContainer(
+        for: LibraryEntry.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+    return RootView(library: LibraryStore(context: container.mainContext))
 }

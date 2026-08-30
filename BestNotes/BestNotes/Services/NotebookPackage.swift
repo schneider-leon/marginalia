@@ -91,12 +91,17 @@ final class NotebookPackage {
     // MARK: - Anlegen
 
     /// Legt ein neues Notizbuch mit einer leeren Seite an und schreibt es sofort.
-    static func create(title: String, size: CGSize = PDFPageFactory.a4, at directory: URL) throws -> NotebookPackage {
+    static func create(
+        id: UUID = UUID(),
+        title: String,
+        size: CGSize = PDFPageFactory.a4,
+        at directory: URL
+    ) throws -> NotebookPackage {
         guard let pdf = PDFPageFactory.blankDocument(size: size) else {
             throw NotebookPackageError.pdfSerializationFailed
         }
 
-        var info = NotebookInfo(title: title)
+        var info = NotebookInfo(id: id, title: title)
         info.pages = [PageDescriptor(kind: .blank)]
 
         let package = NotebookPackage(

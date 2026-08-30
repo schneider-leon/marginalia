@@ -57,8 +57,15 @@ final class TabsStore {
         }
 
         var session: DocumentSession?
-        if node.kind == .pdf, let url = node.fileURL {
-            session = try DocumentSession(url: url)
+        if let url = node.documentURL {
+            switch node.kind {
+            case .pdf:
+                session = try DocumentSession(pdfAt: url, name: node.name)
+            case .notebook:
+                session = DocumentSession(package: try NotebookPackage.read(from: url), name: node.name)
+            case .folder:
+                break
+            }
         }
 
         tabs.append(DocumentTab(id: node.id, title: node.name, kind: node.kind, session: session))
@@ -117,5 +124,12 @@ final class TabsStore {
     func rename(id: UUID, to title: String) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         tabs[index].title = title
+        tabs[index].session?.displayName = title
+    }
+
+    /// Ob dieser Knoten gerade offen ist — entscheidet, wer den Titel im
+    /// Paket nachzieht.
+    func isOpen(_ id: UUID) -> Bool {
+        tabs.contains { $0.id == id }
     }
 }

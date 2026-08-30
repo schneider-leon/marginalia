@@ -40,8 +40,8 @@ struct LibraryNode: Identifiable, Hashable {
     /// `nil` bei Blaettern — `OutlineGroup` blendet den Aufklapppfeil daran aus.
     var children: [LibraryNode]?
 
-    /// Nur bei `.pdf` gesetzt. Notizbuecher bekommen ihr eigenes Paket in Schritt 6.
-    var fileURL: URL?
+    /// Datei in der Bibliothek — `nil` bei Ordnern.
+    var documentURL: URL?
 
     var isFolder: Bool { kind == .folder }
     var symbol: String { kind.symbol }
@@ -51,13 +51,13 @@ struct LibraryNode: Identifiable, Hashable {
         name: String,
         kind: Kind,
         children: [LibraryNode]? = nil,
-        fileURL: URL? = nil
+        documentURL: URL? = nil
     ) {
         self.id = id
         self.name = name
         self.kind = kind
         self.children = kind == .folder ? (children ?? []) : children
-        self.fileURL = fileURL
+        self.documentURL = documentURL
     }
 
     static func folder(_ name: String, _ children: [LibraryNode] = []) -> LibraryNode {
@@ -69,6 +69,10 @@ struct LibraryNode: Identifiable, Hashable {
     }
 
     static func pdf(_ name: String, url: URL? = nil) -> LibraryNode {
-        LibraryNode(name: name, kind: .pdf, fileURL: url)
+        LibraryNode(name: name, kind: .pdf, documentURL: url)
+    }
+
+    static func notebook(_ name: String, url: URL?) -> LibraryNode {
+        LibraryNode(name: name, kind: .notebook, documentURL: url)
     }
 }
