@@ -143,6 +143,21 @@ final class DocumentSession: Identifiable {
     private(set) var hasUnsavedChanges = false
     var pendingComment: PendingComment?
 
+    /// Auffaelligkeiten beim Oeffnen — etwa reparierte Seitenbeschreibungen.
+    private(set) var loadWarnings: [String] = []
+
+    /// Letzter fehlgeschlagener Sicherungsversuch. Wird angezeigt, statt
+    /// still verschluckt zu werden: eine stumm scheiternde Autosicherung
+    /// waere die schlechteste aller Varianten.
+    var saveError: String?
+
+    @ObservationIgnored
+    private var autosaveTask: Task<Void, Never>?
+
+    /// Kurz genug, dass wenig verlorengeht, lang genug, dass nicht bei jedem
+    /// Tastendruck eine Datei geschrieben wird.
+    private static let autosaveDelay = Duration.seconds(3)
+
     // MARK: Notizbuch
 
     var notebookMode: NotebookMode = .write
@@ -216,6 +231,9 @@ final class DocumentSession: Identifiable {
         self.displayName = name
         undoManager.levelsOfUndo = 100
 
+        loadWarnings = package.loadWarnings
+        package.pruneUnreferencedAssets()
+
         let engine = NotebookTextEngine(rtf: package.bodyRTF)
         engine.updateContainers(sizes: package.textAreaSizes())
         textEngine = engine
@@ -236,6 +254,7 @@ final class DocumentSession: Identifiable {
     private func textDidChange() {
         hasUnsavedChanges = true
         editRevision &+= 1
+        scheduleAutosave()
         // Seiten erst im naechsten Durchlauf nachziehen: waehrend der
         // Layout-Manager noch mit der Aenderung beschaeftigt ist, darf man
         // ihm keine Container unter den Fuessen wegziehen.
@@ -256,6 +275,7 @@ final class DocumentSession: Identifiable {
         if added > 0 {
             pageDescriptors = package.info.pages
             hasUnsavedChanges = true
+            scheduleAutosave()
         }
     }
 
@@ -265,6 +285,7 @@ final class DocumentSession: Identifiable {
         try? package.insertBlankPage(at: position)
         syncNotebookState()
         hasUnsavedChanges = true
+        scheduleAutosave()
         commandTarget?.refreshDisplay()
     }
 
@@ -273,6 +294,7 @@ final class DocumentSession: Identifiable {
         package.removePage(at: index)
         syncNotebookState()
         hasUnsavedChanges = true
+        scheduleAutosave()
         commandTarget?.refreshDisplay()
     }
 
@@ -281,6 +303,7 @@ final class DocumentSession: Identifiable {
         ruling = value
         package.setRuling(value)
         hasUnsavedChanges = true
+        scheduleAutosave()
     }
 
     // MARK: Bilder
@@ -397,6 +420,7 @@ final class DocumentSession: Identifiable {
         overlayRevision &+= 1
         hasUnsavedChanges = true
         editRevision &+= 1
+        scheduleAutosave()
     }
 
     var selectedTextRange: NSRange {
@@ -416,8 +440,41 @@ final class DocumentSession: Identifiable {
     }
 
     func close() {
+        autosaveTask?.cancel()
+        autosaveTask = nil
         commandTarget = nil
         undoManager.removeAllActions()
+    }
+
+    func dismissLoadWarnings() {
+        loadWarnings = []
+    }
+
+    // MARK: Automatisches Sichern
+
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        autosaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.autosaveDelay)
+            guard !Task.isCancelled else { return }
+            self?.saveQuietly()
+        }
+    }
+
+    /// Sichert, wenn noetig, und meldet einen Fehlschlag ueber `saveError`.
+    /// - Returns: ob am Ende alles auf der Platte steht.
+    @discardableResult
+    func saveQuietly() -> Bool {
+        guard hasUnsavedChanges else { return true }
+        do {
+            try save()
+            saveError = nil
+            return true
+        } catch {
+            let localized = error as? LocalizedError
+            saveError = localized?.errorDescription ?? error.localizedDescription
+            return false
+        }
     }
 
     // MARK: Navigation & Zoom (SwiftUI/Menue -> PDFView)
@@ -491,6 +548,7 @@ final class DocumentSession: Identifiable {
         hasUnsavedChanges = true
         editRevision &+= 1
         commandTarget?.refreshDisplay()
+        scheduleAutosave()
     }
 
     // MARK: Kommentar

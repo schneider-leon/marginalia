@@ -9,6 +9,7 @@
 //  sonst muesste jede Auswahl entscheiden, ob sie den Tab-Stapel ueberschreibt.
 //
 
+import AppKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -56,6 +57,14 @@ struct RootView: View {
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
         .task { showStartupWarningIfNeeded() }
+        // Netz unter der Autosicherung: beim Beenden und beim Wegklicken der
+        // App wird noch einmal alles weggeschrieben.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            tabs.saveAll()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            tabs.saveAll()
+        }
         .onChange(of: selection) { openSelectedNode() }
         .onChange(of: tabs.activeID) { syncSelectionToActiveTab() }
         .alert(item: $failure) { failure in
@@ -66,15 +75,15 @@ struct RootView: View {
             )
         }
         .confirmationDialog(
-            pendingClose.map { "„\($0.title)“ hat ungesicherte Aenderungen." } ?? "",
+            pendingClose.map { "„\($0.title)“ konnte nicht gesichert werden." } ?? "",
             isPresented: pendingCloseBinding,
             titleVisibility: .visible
         ) {
-            Button("Sichern") { resolvePendingClose(saving: true) }
-            Button("Verwerfen", role: .destructive) { resolvePendingClose(saving: false) }
-            Button("Abbrechen", role: .cancel) { pendingClose = nil }
+            Button("Erneut versuchen") { resolvePendingClose(saving: true) }
+            Button("Trotzdem schliessen", role: .destructive) { resolvePendingClose(saving: false) }
+            Button("Offen lassen", role: .cancel) { pendingClose = nil }
         } message: {
-            Text("Gesichert wird direkt in die geoeffnete PDF-Datei.")
+            Text("Die Aenderungen konnten nicht gesichert werden. Beim Schliessen gehen sie verloren.")
         }
     }
 
@@ -241,12 +250,19 @@ struct RootView: View {
         requestClose(id: activeID)
     }
 
+    /// Beim Schliessen wird gesichert. Nachgefragt wird nur, wenn das
+    /// scheitert — sonst waere die Rueckfrage bei aktiver Autosicherung nur
+    /// noch im Weg.
     private func requestClose(id: UUID) {
         guard let tab = tabs.tab(id: id) else { return }
-        if tab.hasUnsavedChanges {
-            pendingClose = PendingClose(id: id, title: tab.title)
-        } else {
+        guard tab.hasUnsavedChanges, let session = tab.session else {
             tabs.close(id: id)
+            return
+        }
+        if session.saveQuietly() {
+            tabs.close(id: id)
+        } else {
+            pendingClose = PendingClose(id: id, title: tab.title)
         }
     }
 
@@ -255,10 +271,7 @@ struct RootView: View {
         pendingClose = nil
 
         if saving, let session = tabs.tab(id: pending.id)?.session {
-            do {
-                try session.save()
-            } catch {
-                failure = ViewerFailure(error: error)
+            guard session.saveQuietly() else {
                 return  // Tab offen lassen, damit nichts verloren geht.
             }
         }

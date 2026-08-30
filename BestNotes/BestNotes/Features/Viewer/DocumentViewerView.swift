@@ -51,6 +51,7 @@ struct DocumentViewerView: View {
         .focusedSceneValue(\.documentSession, session)
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
+        .sessionAlerts(session)
         .onAppear { syncPageField() }
         .onChange(of: session.currentPageIndex) { syncPageField() }
     }

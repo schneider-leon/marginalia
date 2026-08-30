@@ -214,7 +214,7 @@ aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 | 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | ✅ |
 | 7 | Leere Seiten, durchlaufender Text, Einbrennen beim Export | ✅ |
 | 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | ✅ |
-| 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |
+| 9 | Autosicherung, Fehlerbehandlung, Testtarget | ✅ |
 
 ## Tastenkuerzel
 
@@ -230,8 +230,41 @@ aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 | ⌘+ / ⌘- / ⌘0 | Zoom |
 | ⌥⌘↑ / ⌥⌘↓ | Seite zurueck / vor |
 
-## Build
+### 6. Sichern passiert von selbst
+
+Jede Aenderung stoesst eine Autosicherung an, die drei Sekunden nach der
+letzten Eingabe schreibt. Zusaetzlich wird beim Schliessen eines Tabs, beim
+Wegklicken der App und beim Beenden gesichert.
+
+Nachgefragt wird nur noch, wenn das Sichern *scheitert* — dann bleibt das
+Dokument offen, statt die Aenderungen stillschweigend fallenzulassen. Eine
+stumm scheiternde Autosicherung waere die schlechteste aller Varianten.
+
+Verwaiste Bilddateien werden beim **Oeffnen** entfernt, nicht beim Sichern:
+waehrend einer Sitzung kann ein Undo ein geloeschtes Bild zurueckholen, und
+dann muss die Datei noch da sein. Beim Oeffnen ist der Undo-Stapel leer.
+
+---
+
+## Build & Tests
 
 ```
 xcodebuild -project BestNotes/BestNotes.xcodeproj -scheme BestNotes -destination 'platform=macOS' build
 ```
+
+```
+xcodebuild test -project BestNotes/BestNotes.xcodeproj -scheme BestNotes -destination 'platform=macOS'
+```
+
+In Xcode: ⌘U. Die Tests liegen im Target `BestNotesTests` und legen sich ihre
+Beispieldateien selbst an — PDF-Fixtures werden mit CoreText erzeugt, und die
+Bibliothek wird ueber `BESTNOTES_LIBRARY_ROOT` in einen Testordner umgelenkt,
+damit nichts im Container des Nutzers landet.
+
+Zwei Fallen, auf die die Tests selbst schon hereingefallen sind und die
+`TestSupport` deshalb ausdruecklich behandelt:
+
+- Eine `PDFPage` ohne lebendes `PDFDocument` rendert leer. Hilfsfunktionen
+  nehmen daher immer das Dokument entgegen, nie nur die Seite.
+- Ausserhalb eines Runloops schliesst der `UndoManager` seine automatischen
+  Gruppen nie — Tests gruppieren von Hand.

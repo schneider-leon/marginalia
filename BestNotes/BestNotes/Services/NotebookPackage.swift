@@ -414,7 +414,23 @@ final class NotebookPackage {
         return try? Data(contentsOf: url.appending(path: Component.assets).appending(path: name))
     }
 
-    /// Bilder, auf die kein Overlay mehr zeigt — Aufraeumkandidaten fuer Schritt 9.
+    /// Loescht Bilddateien, auf die kein Overlay mehr zeigt.
+    ///
+    /// Bewusst nur beim Oeffnen aufrufen, nicht bei jedem Sichern: waehrend
+    /// einer Sitzung kann ein Undo ein geloeschtes Bild zurueckholen, und dann
+    /// muss die Datei noch da sein. Beim Oeffnen ist der Undo-Stapel leer.
+    @discardableResult
+    func pruneUnreferencedAssets() -> [String] {
+        let names = unreferencedAssetNames()
+        let directory = url.appending(path: Component.assets)
+        for name in names {
+            try? FileManager.default.removeItem(at: directory.appending(path: name))
+            pendingAssets.removeValue(forKey: name)
+        }
+        return names
+    }
+
+    /// Bilder, auf die kein Overlay mehr zeigt.
     func unreferencedAssetNames() -> [String] {
         var referenced: Set<String> = []
         for page in overlays.pages {

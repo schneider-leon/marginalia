@@ -15,6 +15,7 @@ struct NotebookEditorView: View {
     @Bindable var session: DocumentSession
 
     @State private var failure: ViewerFailure?
+    @State private var showsLoadWarnings = false
 
     private let pageGap: CGFloat = 24
 
@@ -35,6 +36,7 @@ struct NotebookEditorView: View {
         .safeAreaInset(edge: .top, spacing: 0) { toolbar }
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)
+        .sessionAlerts(session)
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
         .alert(item: $failure) { failure in
@@ -172,6 +174,18 @@ struct NotebookEditorView: View {
 
             Spacer(minLength: 0)
 
+            if !session.loadWarnings.isEmpty {
+                Button {
+                    showsLoadWarnings = true
+                } label: {
+                    Label("Hinweise", systemImage: "exclamationmark.triangle.fill")
+                }
+                .help("Beim Oeffnen wurde etwas zurechtgerueckt")
+                .popover(isPresented: $showsLoadWarnings, arrowEdge: .bottom) {
+                    loadWarningsPopover
+                }
+            }
+
             if session.hasUnsavedChanges {
                 Text("Nicht gesichert")
                     .font(.callout)
@@ -184,6 +198,28 @@ struct NotebookEditorView: View {
         .padding(.vertical, 7)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var loadWarningsPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Beim Oeffnen zurechtgerueckt")
+                .font(.headline)
+            ForEach(session.loadWarnings, id: \.self) { warning in
+                Label(warning, systemImage: "wrench.adjustable")
+                    .labelStyle(.titleAndIcon)
+                    .font(.callout)
+            }
+            HStack {
+                Spacer()
+                Button("Verstanden") {
+                    showsLoadWarnings = false
+                    session.dismissLoadWarnings()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
     }
 
     private var rulingBinding: Binding<PageRuling> {

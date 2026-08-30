@@ -119,6 +119,16 @@ final class TabsStore {
         close(ids: Set(tabs.map(\.id)))
     }
 
+    /// Sichert alle offenen Dokumente — beim Beenden und vor riskanten Schritten.
+    /// - Returns: Titel der Dokumente, bei denen das Sichern fehlschlug.
+    @discardableResult
+    func saveAll() -> [String] {
+        tabs.compactMap { tab in
+            guard let session = tab.session else { return nil }
+            return session.saveQuietly() ? nil : tab.title
+        }
+    }
+
     // MARK: - Bibliothek gespiegelt
 
     func rename(id: UUID, to title: String) {
