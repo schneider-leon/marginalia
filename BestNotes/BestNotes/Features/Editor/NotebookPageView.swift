@@ -25,6 +25,19 @@ final class NotebookPageBackgroundView: NSView {
 
     override var isFlipped: Bool { true }
 
+    /// Eine Seite ist weisses Papier, unabhaengig vom Systemdesign. Ohne das
+    /// zeichnet AppKit im Dunkelmodus weisse Schrift, weisse Linien und einen
+    /// weissen Cursor auf weisses Papier.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        appearance = NSAppearance(named: .aqua)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        appearance = NSAppearance(named: .aqua)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
@@ -83,6 +96,8 @@ struct NotebookPageView: NSViewRepresentable {
             textView.textContainerInset = .zero
             textView.delegate = context.coordinator
             textView.typingAttributes = NotebookTextEngine.defaultAttributes
+            textView.appearance = NSAppearance(named: .aqua)
+            textView.insertionPointColor = .black
             view.addSubview(textView)
             context.coordinator.textView = textView
         }

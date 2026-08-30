@@ -62,16 +62,19 @@ enum NotebookRenderer {
             NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
 
             let textOrigin = CGPoint(x: insets.leading, y: insets.top)
-            let textArea = CGRect(
-                origin: textOrigin,
-                size: insets.textAreaSize(for: box.size)
-            )
+            let textArea = CGRect(origin: textOrigin, size: insets.textAreaSize(for: box.size))
 
-            if let containerIndex = writableIndices.firstIndex(of: index) {
-                drawRuling(ruling, in: textArea, lineHeight: lineHeight(of: engine))
-                if let range = engine.glyphRange(forContainerAt: containerIndex), range.length > 0 {
-                    engine.layoutManager.drawBackground(forGlyphRange: range, at: textOrigin)
-                    engine.layoutManager.drawGlyphs(forGlyphRange: range, at: textOrigin)
+            // Ohne View gibt es keine Darstellung, gegen die dynamische Farben
+            // aufloesen koennten — also eine vorgeben. Sonst wird im
+            // Dunkelmodus weiss auf weiss gezeichnet.
+            let paper = NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
+            paper.performAsCurrentDrawingAppearance {
+                if let containerIndex = writableIndices.firstIndex(of: index) {
+                    drawRuling(ruling, in: textArea, lineHeight: lineHeight(of: engine))
+                    if let range = engine.glyphRange(forContainerAt: containerIndex), range.length > 0 {
+                        engine.layoutManager.drawBackground(forGlyphRange: range, at: textOrigin)
+                        engine.layoutManager.drawGlyphs(forGlyphRange: range, at: textOrigin)
+                    }
                 }
             }
 
@@ -100,8 +103,9 @@ enum NotebookRenderer {
     static func drawRuling(_ ruling: PageRuling, in area: CGRect, lineHeight: CGFloat) {
         guard ruling != .none, lineHeight > 1 else { return }
 
-        let color = NSColor.separatorColor.withAlphaComponent(0.6)
-        color.setStroke()
+        // Feste Farbe aus demselben Grund wie bei der Schrift: `separatorColor`
+        // loest sich im Dunkelmodus zu Weiss auf.
+        NSColor(calibratedRed: 0.55, green: 0.62, blue: 0.74, alpha: 1).setStroke()
         let path = NSBezierPath()
         path.lineWidth = 0.5
 

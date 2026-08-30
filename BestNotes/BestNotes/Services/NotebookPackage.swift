@@ -342,11 +342,12 @@ final class NotebookPackage {
 
     @discardableResult
     func insertBlankPage(at index: Int? = nil, size: CGSize? = nil) throws -> PageDescriptor {
-        guard let page = PDFPageFactory.blankPage(size: size ?? preferredPageSize) else {
+        guard let blank = PDFPageFactory.blankPage(size: size ?? preferredPageSize) else {
             throw NotebookPackageError.pdfSerializationFailed
         }
         let position = min(max(index ?? info.pages.count, 0), info.pages.count)
-        pdf.insert(page, at: position)
+        pdf.insert(blank.page, at: position)
+        withExtendedLifetime(blank.owner) {}
 
         let descriptor = PageDescriptor(kind: .blank)
         info.pages.insert(descriptor, at: position)

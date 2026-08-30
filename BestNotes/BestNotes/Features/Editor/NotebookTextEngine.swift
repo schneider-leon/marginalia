@@ -38,7 +38,7 @@ final class NotebookTextEngine: NSObject, NSTextStorageDelegate {
     init(rtf: Data? = nil) {
         let attributed: NSAttributedString
         if let rtf, let restored = NSAttributedString(rtf: rtf, documentAttributes: nil) {
-            attributed = restored
+            attributed = Self.repairInvisibleInk(restored)
         } else {
             attributed = NSAttributedString(string: "", attributes: Self.defaultAttributes)
         }
@@ -59,8 +59,27 @@ final class NotebookTextEngine: NSObject, NSTextStorageDelegate {
         MainActor.assumeIsolated { onEdited?() }
     }
 
+    /// Bewusst `NSColor.black` statt `.textColor`: die Seite ist immer weisses
+    /// Papier — auch im Dunkelmodus und erst recht in der exportierten PDF.
+    /// Eine dynamische Farbe loeste sich dort zu Weiss auf und waere unsichtbar.
+    /// Frueher gespeicherter Text kann weisse Schrift tragen: die
+    /// Standardfarbe war `NSColor.textColor`, und die loest im Dunkelmodus zu
+    /// Weiss auf — auf weissem Papier unsichtbar. Beim Laden wird das
+    /// zurueckgedreht, damit alte Notizen nicht verschwunden bleiben.
+    private static func repairInvisibleInk(_ text: NSAttributedString) -> NSAttributedString {
+        let mutable = NSMutableAttributedString(attributedString: text)
+        let full = NSRange(location: 0, length: mutable.length)
+        mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
+            guard let color = (value as? NSColor)?.usingColorSpace(.deviceRGB) else { return }
+            if color.brightnessComponent > 0.9 && color.saturationComponent < 0.1 {
+                mutable.addAttribute(.foregroundColor, value: NSColor.black, range: range)
+            }
+        }
+        return mutable
+    }
+
     static var defaultAttributes: [NSAttributedString.Key: Any] {
-        [.font: defaultFont, .foregroundColor: NSColor.textColor]
+        [.font: defaultFont, .foregroundColor: NSColor.black]
     }
 
     var isEmpty: Bool { textStorage.length == 0 }

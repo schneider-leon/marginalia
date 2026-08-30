@@ -35,7 +35,17 @@ enum PDFPageFactory {
         return PDFDocument(data: data as Data)
     }
 
-    static func blankPage(size: CGSize = a4) -> PDFPage? {
-        blankDocument(size: size)?.page(at: 0)
+    /// Gibt Seite *und* Dokument zurueck.
+    ///
+    /// Nur die Seite herauszureichen reicht nicht: das erzeugende Dokument
+    /// wuerde sofort freigegeben, und PDFKit kann eine Seite ohne Dokument
+    /// nicht zeichnen („Drawing a PDFPage when its PDFDocument is nil is
+    /// unsupported.“). Der Aufrufer muss das Dokument bis zum Einfuegen
+    /// am Leben halten.
+    static func blankPage(size: CGSize = a4) -> (page: PDFPage, owner: PDFDocument)? {
+        guard let document = blankDocument(size: size), let page = document.page(at: 0) else {
+            return nil
+        }
+        return (page, document)
     }
 }
