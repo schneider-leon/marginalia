@@ -148,11 +148,25 @@ mit dem Pfad als Fallback.
 | 2 | Minimaler PDF-Viewer (laden, anzeigen, Zoom/Scroll) | ✅ |
 | 3 | Annotationen: Highlight, Freihand, Textkommentar + Export | ✅ |
 | 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | ✅ |
-| 5 | Tab-Leiste fuer mehrere offene Dokumente | offen |
+| 5 | Tab-Leiste fuer mehrere offene Dokumente | ✅ |
 | 6 | `.bestnote`-Format + SwiftData-Bibliothek | offen |
 | 7 | Leere Seiten, Textoverlays, Einbrennen beim Export | offen |
 | 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | offen |
 | 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |
+
+## Tastenkuerzel
+
+| Kuerzel | Aktion |
+|---|---|
+| ⌘O | PDF importieren |
+| ⌘S / ⇧⌘E | Sichern / als PDF exportieren |
+| ⌘Z / ⇧⌘Z | Widerrufen / Wiederholen |
+| ⌃1–⌃5 | Werkzeug: Auswahl, Markieren, Freihand, Kommentar, Radierer |
+| ⌘1–⌘9 | Tab wechseln |
+| ⇧⌘[ / ⇧⌘] | Vorheriger / naechster Tab |
+| ⌘W | Tab schliessen |
+| ⌘+ / ⌘- / ⌘0 | Zoom |
+| ⌥⌘↑ / ⌥⌘↓ | Seite zurueck / vor |
 
 ## Build
 

@@ -2,9 +2,11 @@
 //  RootView.swift
 //  BestNotes
 //
-//  Wurzel-Layout: Bibliothek links, Dokument rechts. Die Sitzungen werden
-//  hier pro Bibliotheks-Knoten zwischengespeichert — daraus wird in Schritt 5
-//  die Tab-Verwaltung.
+//  Wurzel-Layout: Bibliothek links, Tab-Leiste und aktives Dokument rechts.
+//
+//  Regel fuer den Detailbereich: er zeigt *immer* den aktiven Tab. Ein Ordner
+//  in der Sidebar bekommt keinen Tab und laesst die Anzeige unveraendert —
+//  sonst muesste jede Auswahl entscheiden, ob sie den Tab-Stapel ueberschreibt.
 //
 
 import SwiftUI
@@ -13,15 +15,13 @@ import UniformTypeIdentifiers
 struct RootView: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var library = LibraryStore()
+    @State private var tabs = TabsStore()
     @State private var selection: UUID?
-
-    /// Geoeffnete Dokumente, damit Zoom- und Scrollposition beim Wechsel
-    /// zwischen Knoten erhalten bleiben.
-    @State private var sessions: [UUID: DocumentSession] = [:]
 
     @State private var isImporterPresented = false
     @State private var importTarget: UUID?
     @State private var failure: ViewerFailure?
+    @State private var pendingClose: PendingClose?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
@@ -29,11 +29,17 @@ struct RootView: View {
                 store: library,
                 selection: $selection,
                 onImportPDF: presentImporter(into:),
+                onRename: rename(id:to:),
                 onDelete: delete(id:)
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             detail
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if !tabs.isEmpty {
+                        DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
+                    }
+                }
         }
         .fileImporter(
             isPresented: $isImporterPresented,
@@ -42,7 +48,10 @@ struct RootView: View {
             onCompletion: handleImport
         )
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
-        .onChange(of: selection) { ensureSessionForSelection() }
+        .focusedSceneValue(\.closeTabAction, closeActiveTab)
+        .focusedSceneValue(\.tabsStore, tabs)
+        .onChange(of: selection) { openSelectedNode() }
+        .onChange(of: tabs.activeID) { syncSelectionToActiveTab() }
         .alert(item: $failure) { failure in
             Alert(
                 title: Text(failure.message),
@@ -50,84 +59,78 @@ struct RootView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .confirmationDialog(
+            pendingClose.map { "„\($0.title)“ hat ungesicherte Aenderungen." } ?? "",
+            isPresented: pendingCloseBinding,
+            titleVisibility: .visible
+        ) {
+            Button("Sichern") { resolvePendingClose(saving: true) }
+            Button("Verwerfen", role: .destructive) { resolvePendingClose(saving: false) }
+            Button("Abbrechen", role: .cancel) { pendingClose = nil }
+        } message: {
+            Text("Gesichert wird direkt in die geoeffnete PDF-Datei.")
+        }
     }
 
     // MARK: - Detailbereich
 
     @ViewBuilder
     private var detail: some View {
-        if let id = selection, let node = library.node(id: id) {
-            switch node.kind {
-            case .pdf:
-                pdfDetail(for: node)
-            case .notebook:
-                placeholder(
-                    symbol: node.symbol,
-                    title: node.name,
-                    message: "Notizbuecher bekommen ihr eigenes Format in Schritt 6."
-                )
-            case .folder:
-                folderDetail(for: node)
-            }
+        if let tab = tabs.activeTab {
+            content(for: tab)
+                .id(tab.id)
         } else {
-            placeholder(
-                symbol: "sidebar.leading",
-                title: "Nichts ausgewaehlt",
-                message: "Waehle links ein Dokument, oder importiere eine PDF."
-            )
+            ContentUnavailableView {
+                Label("Kein Dokument geoeffnet", systemImage: "doc.richtext")
+            } description: {
+                Text("Waehle links ein Dokument, oder importiere eine PDF.")
+            } actions: {
+                Button("PDF importieren …", action: presentImporterAtSelection)
+                    .buttonStyle(.borderedProminent)
+            }
+            .navigationTitle("BestNotes")
         }
     }
 
     @ViewBuilder
-    private func pdfDetail(for node: LibraryNode) -> some View {
-        if let session = sessions[node.id] {
+    private func content(for tab: DocumentTab) -> some View {
+        if let session = tab.session {
             DocumentViewerView(session: session)
-                .id(session.id)
         } else {
-            placeholder(
-                symbol: node.symbol,
-                title: node.name,
-                message: "Testeintrag ohne hinterlegte Datei — importiere eine echte PDF, um sie zu oeffnen."
-            )
+            ContentUnavailableView {
+                Label(tab.title, systemImage: tab.symbol)
+            } description: {
+                Text(placeholderMessage(for: tab.kind))
+            }
+            .navigationTitle(tab.title)
         }
     }
 
-    private func folderDetail(for node: LibraryNode) -> some View {
-        let children = node.children ?? []
-        let breadcrumb = library.path(to: node.id).map(\.name).joined(separator: " › ")
-        return placeholder(
-            symbol: children.isEmpty ? "folder" : "folder.fill",
-            title: breadcrumb,
-            message: children.isEmpty
-                ? "Dieser Ordner ist leer."
-                : "\(children.count) Eintraege"
-        )
-    }
-
-    private func placeholder(symbol: String, title: String, message: String) -> some View {
-        ContentUnavailableView {
-            Label(title, systemImage: symbol)
-        } description: {
-            Text(message)
+    private func placeholderMessage(for kind: LibraryNode.Kind) -> String {
+        switch kind {
+        case .notebook: "Notizbuecher bekommen ihr eigenes Format in Schritt 6."
+        case .pdf: "Testeintrag ohne hinterlegte Datei — importiere eine echte PDF, um sie zu oeffnen."
+        case .folder: ""
         }
-        .navigationTitle(title)
     }
 
-    // MARK: - Sitzungen
+    // MARK: - Auswahl <-> Tabs
 
-    private func ensureSessionForSelection() {
-        guard let id = selection,
-              let node = library.node(id: id),
-              node.kind == .pdf,
-              let url = node.fileURL,
-              sessions[id] == nil
-        else { return }
-
+    private func openSelectedNode() {
+        guard let id = selection, let node = library.node(id: id), node.kind != .folder else { return }
         do {
-            sessions[id] = try DocumentSession(url: url)
+            try tabs.open(node)
         } catch {
             failure = ViewerFailure(error: error)
         }
+    }
+
+    /// Gegenrichtung: ein Tab-Wechsel hebt den Knoten in der Sidebar hervor.
+    /// Die Gleichheitspruefung verhindert, dass sich beide Richtungen
+    /// gegenseitig aufschaukeln.
+    private func syncSelectionToActiveTab() {
+        guard let activeID = tabs.activeID, selection != activeID else { return }
+        selection = activeID
     }
 
     // MARK: - Import
@@ -151,26 +154,71 @@ struct RootView: View {
                 lastID = node.id
             }
             importTarget = nil
-            if let lastID {
-                selection = lastID
-                ensureSessionForSelection()
-            }
+            if let lastID { selection = lastID }
         case .failure(let error):
             importTarget = nil
             failure = ViewerFailure(error: error)
         }
     }
 
-    // MARK: - Loeschen
+    // MARK: - Bibliothek aendern
+
+    private func rename(id: UUID, to name: String) {
+        library.rename(id: id, to: name)
+        if let updated = library.node(id: id) {
+            tabs.rename(id: id, to: updated.name)
+        }
+    }
 
     private func delete(id: UUID) {
         let removed = library.delete(id: id)
-        for removedID in removed {
-            sessions.removeValue(forKey: removedID)?.close()
-        }
+        tabs.close(ids: removed)
         if let selection, removed.contains(selection) {
-            self.selection = nil
+            self.selection = tabs.activeID
         }
+    }
+
+    // MARK: - Tabs schliessen
+
+    private struct PendingClose: Identifiable {
+        let id: UUID
+        let title: String
+    }
+
+    private var pendingCloseBinding: Binding<Bool> {
+        Binding(
+            get: { pendingClose != nil },
+            set: { if !$0 { pendingClose = nil } }
+        )
+    }
+
+    private func closeActiveTab() {
+        guard let activeID = tabs.activeID else { return }
+        requestClose(id: activeID)
+    }
+
+    private func requestClose(id: UUID) {
+        guard let tab = tabs.tab(id: id) else { return }
+        if tab.hasUnsavedChanges {
+            pendingClose = PendingClose(id: id, title: tab.title)
+        } else {
+            tabs.close(id: id)
+        }
+    }
+
+    private func resolvePendingClose(saving: Bool) {
+        guard let pending = pendingClose else { return }
+        pendingClose = nil
+
+        if saving, let session = tabs.tab(id: pending.id)?.session {
+            do {
+                try session.save()
+            } catch {
+                failure = ViewerFailure(error: error)
+                return  // Tab offen lassen, damit nichts verloren geht.
+            }
+        }
+        tabs.close(id: pending.id)
     }
 }
 

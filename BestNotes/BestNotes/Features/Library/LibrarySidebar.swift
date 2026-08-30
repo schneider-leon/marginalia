@@ -10,6 +10,7 @@ struct LibrarySidebar: View {
     @Binding var selection: UUID?
 
     let onImportPDF: (UUID?) -> Void
+    let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
 
     @State private var renaming: RenameRequest?
@@ -34,7 +35,7 @@ struct LibrarySidebar: View {
             TextField("Name", text: renameTextBinding)
             Button("Abbrechen", role: .cancel) { renaming = nil }
             Button("Sichern") {
-                if let renaming { store.rename(id: renaming.id, to: renaming.name) }
+                if let renaming { onRename(renaming.id, renaming.name) }
                 renaming = nil
             }
         }

@@ -14,4 +14,6 @@ extension FocusedValues {
     @Entry var openDocumentAction: (() -> Void)?
     @Entry var saveDocumentAction: (() -> Void)?
     @Entry var exportDocumentAction: (() -> Void)?
+    @Entry var closeTabAction: (() -> Void)?
+    @Entry var tabsStore: TabsStore?
 }

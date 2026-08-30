@@ -13,6 +13,8 @@ struct DocumentCommands: Commands {
     @FocusedValue(\.saveDocumentAction) private var saveDocument
     @FocusedValue(\.exportDocumentAction) private var exportDocument
     @FocusedValue(\.documentSession) private var session
+    @FocusedValue(\.closeTabAction) private var closeTab
+    @FocusedValue(\.tabsStore) private var tabs
 
     var body: some Commands {
         // „Neu“ ergibt erst mit dem Notizbuchformat (Schritt 6) Sinn.
@@ -51,8 +53,30 @@ struct DocumentCommands: Commands {
                 } label: {
                     Label(tool.label, systemImage: tool.symbol)
                 }
-                .keyboardShortcut(tool.shortcut, modifiers: .command)
+                // Control statt Command: ⌘1–⌘9 gehoeren den Tabs.
+                .keyboardShortcut(tool.shortcut, modifiers: .control)
                 .disabled(session == nil)
+            }
+        }
+
+        CommandMenu("Tabs") {
+            Button("Naechster Tab") { tabs?.activateNext() }
+                .keyboardShortcut("]", modifiers: [.command, .shift])
+            Button("Vorheriger Tab") { tabs?.activatePrevious() }
+                .keyboardShortcut("[", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Tab schliessen") { closeTab?() }
+                .keyboardShortcut("w", modifiers: .command)
+                .disabled(closeTab == nil || tabs?.isEmpty != false)
+
+            if let tabs, !tabs.isEmpty {
+                Divider()
+                ForEach(Array(tabs.tabs.prefix(9).enumerated()), id: \.element.id) { index, tab in
+                    Button(tab.title) { tabs.activate(index: index) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
             }
         }
 
