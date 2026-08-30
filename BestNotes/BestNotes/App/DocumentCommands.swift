@@ -2,13 +2,16 @@
 //  DocumentCommands.swift
 //  BestNotes
 //
-//  Menuebefehle rund um das aktive Dokument.
+//  Menuebefehle rund um das aktive Dokument. Die Befehle greifen ueber
+//  @FocusedValue auf die aktive Szene zu — kein globaler App-State.
 //
 
 import SwiftUI
 
 struct DocumentCommands: Commands {
     @FocusedValue(\.openDocumentAction) private var openDocument
+    @FocusedValue(\.saveDocumentAction) private var saveDocument
+    @FocusedValue(\.exportDocumentAction) private var exportDocument
     @FocusedValue(\.documentSession) private var session
 
     var body: some Commands {
@@ -17,6 +20,40 @@ struct DocumentCommands: Commands {
             Button("PDF oeffnen …") { openDocument?() }
                 .keyboardShortcut("o", modifiers: .command)
                 .disabled(openDocument == nil)
+        }
+
+        CommandGroup(replacing: .saveItem) {
+            Button("Sichern") { saveDocument?() }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(session?.hasUnsavedChanges != true)
+
+            Button("Als PDF exportieren …") { exportDocument?() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(exportDocument == nil)
+        }
+
+        // Die eingebauten Eintraege haengen an SwiftUIs eigenem UndoManager;
+        // unsere Annotationen laufen ueber den der Session.
+        CommandGroup(replacing: .undoRedo) {
+            Button(undoTitle) { session?.undo() }
+                .keyboardShortcut("z", modifiers: .command)
+                .disabled(session?.canUndo != true)
+
+            Button(redoTitle) { session?.redo() }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .disabled(session?.canRedo != true)
+        }
+
+        CommandMenu("Werkzeuge") {
+            ForEach(AnnotationTool.allCases) { tool in
+                Button {
+                    session?.activeTool = tool
+                } label: {
+                    Label(tool.label, systemImage: tool.symbol)
+                }
+                .keyboardShortcut(tool.shortcut, modifiers: .command)
+                .disabled(session == nil)
+            }
         }
 
         CommandGroup(after: .toolbar) {
@@ -38,5 +75,19 @@ struct DocumentCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: [.command, .option])
                 .disabled(session?.canGoToPreviousPage != true)
         }
+    }
+
+    private var undoTitle: String {
+        guard let name = session?.undoManager.undoActionName, !name.isEmpty else {
+            return "Widerrufen"
+        }
+        return "\(name) widerrufen"
+    }
+
+    private var redoTitle: String {
+        guard let name = session?.undoManager.redoActionName, !name.isEmpty else {
+            return "Wiederholen"
+        }
+        return "\(name) wiederholen"
     }
 }

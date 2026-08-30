@@ -6,6 +6,7 @@
 //  genau eine Session.
 //
 
+import AppKit
 import Foundation
 import Observation
 import PDFKit
@@ -24,6 +25,7 @@ protocol PDFViewCommandTarget: AnyObject {
     func zoomIn()
     func zoomOut()
     func fitToWindow()
+    func refreshDisplay()
 }
 
 // MARK: - Anzeigemodus
@@ -77,6 +79,13 @@ enum DocumentSessionError: LocalizedError {
     }
 }
 
+/// Ein angeklickter Punkt, fuer den noch der Kommentartext fehlt.
+struct PendingComment: Identifiable {
+    let id = UUID()
+    let point: CGPoint
+    let page: PDFPage
+}
+
 // MARK: - Session
 
 @MainActor
@@ -88,6 +97,8 @@ final class DocumentSession: Identifiable {
 
     /// Vom Nutzer steuerbar, wird in `updateNSView` an die `PDFView` gespiegelt.
     var displayMode: PageDisplayMode = .singlePageContinuous
+    var activeTool: AnnotationTool = .select
+    var style = AnnotationStyle()
 
     /// Aus der `PDFView` zurueckgespiegelt — nur der Coordinator schreibt hier.
     private(set) var currentPageIndex = 0
@@ -95,16 +106,28 @@ final class DocumentSession: Identifiable {
     private(set) var minScaleFactor: CGFloat = 0.25
     private(set) var maxScaleFactor: CGFloat = 5
 
+    private(set) var hasUnsavedChanges = false
+    var pendingComment: PendingComment?
+
     @ObservationIgnored
     weak var commandTarget: (any PDFViewCommandTarget)?
 
     @ObservationIgnored
+    let undoManager = UndoManager()
+
+    @ObservationIgnored
     private let access: SecurityScopedAccess
+
+    /// Nur da, damit SwiftUI die Undo-Buttons neu bewertet — der UndoManager
+    /// selbst ist nicht observierbar.
+    private(set) var editRevision = 0
 
     var displayName: String { url.deletingPathExtension().lastPathComponent }
     var pageCount: Int { document.pageCount }
     var canGoToNextPage: Bool { currentPageIndex + 1 < pageCount }
     var canGoToPreviousPage: Bool { currentPageIndex > 0 }
+    var canUndo: Bool { _ = editRevision; return undoManager.canUndo }
+    var canRedo: Bool { _ = editRevision; return undoManager.canRedo }
 
     init(url: URL) throws {
         let access = SecurityScopedAccess(url: url)
@@ -115,14 +138,16 @@ final class DocumentSession: Identifiable {
         self.url = url
         self.document = document
         self.access = access
+        undoManager.levelsOfUndo = 100
     }
 
     func close() {
         commandTarget = nil
+        undoManager.removeAllActions()
         access.release()
     }
 
-    // MARK: Kommandos (SwiftUI/Menue -> PDFView)
+    // MARK: Navigation & Zoom (SwiftUI/Menue -> PDFView)
 
     func go(toPageIndex index: Int) {
         guard index >= 0, index < pageCount else { return }
@@ -146,5 +171,143 @@ final class DocumentSession: Identifiable {
         if scaleFactor != scale { scaleFactor = scale }
         if minScaleFactor != min { minScaleFactor = min }
         if maxScaleFactor != max { maxScaleFactor = max }
+    }
+
+    // MARK: Annotationen
+
+    func addAnnotations(
+        _ annotations: [PDFAnnotation],
+        on page: PDFPage,
+        actionName: String,
+        alreadyPlaced: Bool = false
+    ) {
+        guard !annotations.isEmpty else { return }
+        if !alreadyPlaced {
+            annotations.forEach(page.addAnnotation)
+        }
+        undoManager.setActionName(actionName)
+        undoManager.registerUndo(withTarget: self) { session in
+            session.removeAnnotations(annotations, on: page, actionName: actionName)
+        }
+        didEdit()
+    }
+
+    func removeAnnotations(_ annotations: [PDFAnnotation], on page: PDFPage, actionName: String) {
+        guard !annotations.isEmpty else { return }
+        annotations.forEach(page.removeAnnotation)
+        undoManager.setActionName(actionName)
+        undoManager.registerUndo(withTarget: self) { session in
+            session.addAnnotations(annotations, on: page, actionName: actionName)
+        }
+        didEdit()
+    }
+
+    func undo() {
+        guard undoManager.canUndo else { return }
+        undoManager.undo()
+        didEdit()
+    }
+
+    func redo() {
+        guard undoManager.canRedo else { return }
+        undoManager.redo()
+        didEdit()
+    }
+
+    private func didEdit() {
+        hasUnsavedChanges = true
+        editRevision &+= 1
+        commandTarget?.refreshDisplay()
+    }
+
+    // MARK: Kommentar
+
+    func requestComment(at point: CGPoint, on page: PDFPage) {
+        pendingComment = PendingComment(point: point, page: page)
+    }
+
+    func commitPendingComment(text: String) {
+        guard let pending = pendingComment else { return }
+        pendingComment = nil
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let annotation = PDFAnnotation(
+            bounds: commentBounds(for: trimmed, at: pending.point, on: pending.page),
+            forType: .freeText,
+            withProperties: nil
+        )
+        annotation.contents = trimmed
+        annotation.font = .systemFont(ofSize: style.textSize)
+        annotation.fontColor = style.textNSColor
+        annotation.color = .clear
+        annotation.alignment = .left
+
+        addAnnotations([annotation], on: pending.page, actionName: "Kommentar")
+    }
+
+    private func commentBounds(for text: String, at point: CGPoint, on page: PDFPage) -> CGRect {
+        let font = NSFont.systemFont(ofSize: style.textSize)
+        let maxWidth: CGFloat = 260
+        let padding: CGFloat = 6
+
+        let measured = (text as NSString).boundingRect(
+            with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+        let size = CGSize(
+            width: min(maxWidth, ceil(measured.width)) + padding * 2,
+            height: ceil(measured.height) + padding * 2
+        )
+
+        // Der Klickpunkt ist die obere linke Ecke; danach in die Seite klemmen.
+        let pageBounds = page.bounds(for: .cropBox)
+        let x = min(max(point.x, pageBounds.minX), pageBounds.maxX - size.width)
+        let y = min(max(point.y - size.height, pageBounds.minY), pageBounds.maxY - size.height)
+        return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    }
+
+    // MARK: Speichern & Export
+
+    /// Schreibt zurueck in die geoeffnete Datei.
+    func save() throws {
+        try PDFExportService.write(document, to: url)
+        hasUnsavedChanges = false
+    }
+
+    /// Schreibt eine Kopie an einen frei gewaehlten Ort.
+    /// - Returns: das Ziel, oder `nil` wenn der Nutzer abgebrochen hat.
+    @discardableResult
+    func exportCopy() throws -> URL? {
+        guard let destination = PDFExportService.chooseExportURL(suggestedName: displayName) else {
+            return nil
+        }
+        try PDFExportService.write(document, to: destination)
+        return destination
+    }
+}
+
+// MARK: - AnnotationEditingDelegate
+
+extension DocumentSession: AnnotationEditingDelegate {
+
+    var annotationUndoManager: UndoManager { undoManager }
+
+    func annotationView(_ view: AnnotatingPDFView, didFinishLive annotation: PDFAnnotation, on page: PDFPage) {
+        addAnnotations([annotation], on: page, actionName: "Freihand", alreadyPlaced: true)
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, didCreate annotations: [PDFAnnotation], on page: PDFPage, actionName: String) {
+        addAnnotations(annotations, on: page, actionName: actionName)
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, didErase annotation: PDFAnnotation, on page: PDFPage) {
+        removeAnnotations([annotation], on: page, actionName: "Loeschen")
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, didRequestCommentAt point: CGPoint, on page: PDFPage) {
+        requestComment(at: point, on: page)
     }
 }

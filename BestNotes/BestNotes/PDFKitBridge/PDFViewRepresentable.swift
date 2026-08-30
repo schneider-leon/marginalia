@@ -18,13 +18,18 @@ import SwiftUI
 struct PDFViewRepresentable: NSViewRepresentable {
     let session: DocumentSession
 
-    /// Bewusst als eigener Parameter und nicht ueber `session.displayMode`
-    /// gelesen: so haengt das SwiftUI-Update sichtbar an diesem Wert.
+    /// Bewusst eigene Parameter statt Zugriff ueber `session`: so haengt das
+    /// SwiftUI-Update sichtbar an genau diesen Werten.
     let displayMode: PageDisplayMode
+    let activeTool: AnnotationTool
+    let style: AnnotationStyle
 
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
+    func makeNSView(context: Context) -> AnnotatingPDFView {
+        let view = AnnotatingPDFView()
         view.document = session.document
+        view.editingDelegate = session
+        view.activeTool = activeTool
+        view.style = style
         view.displayMode = displayMode.pdfDisplayMode
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
@@ -35,7 +40,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: PDFView, context: Context) {
+    func updateNSView(_ nsView: AnnotatingPDFView, context: Context) {
         if nsView.document !== session.document {
             nsView.document = session.document
             nsView.autoScales = true
@@ -43,9 +48,13 @@ struct PDFViewRepresentable: NSViewRepresentable {
         if nsView.displayMode != displayMode.pdfDisplayMode {
             nsView.displayMode = displayMode.pdfDisplayMode
         }
+        if nsView.activeTool != activeTool {
+            nsView.activeTool = activeTool
+        }
+        nsView.style = style
     }
 
-    static func dismantleNSView(_ nsView: PDFView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: AnnotatingPDFView, coordinator: Coordinator) {
         coordinator.detach()
     }
 
@@ -58,13 +67,13 @@ struct PDFViewRepresentable: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, PDFViewCommandTarget {
         private let session: DocumentSession
-        private weak var pdfView: PDFView?
+        private weak var pdfView: AnnotatingPDFView?
 
         init(session: DocumentSession) {
             self.session = session
         }
 
-        func attach(to view: PDFView) {
+        func attach(to view: AnnotatingPDFView) {
             pdfView = view
             session.commandTarget = self
 
@@ -154,6 +163,12 @@ struct PDFViewRepresentable: NSViewRepresentable {
             guard let pdfView else { return }
             pdfView.autoScales = true
             syncStateToSession()
+        }
+
+        /// Nach Undo/Redo hat sich der Annotationsbestand geaendert, ohne dass
+        /// PDFKit davon etwas mitbekommen haette.
+        func refreshDisplay() {
+            pdfView?.needsDisplay = true
         }
     }
 }

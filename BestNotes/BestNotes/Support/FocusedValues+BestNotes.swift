@@ -12,4 +12,6 @@ import SwiftUI
 extension FocusedValues {
     @Entry var documentSession: DocumentSession?
     @Entry var openDocumentAction: (() -> Void)?
+    @Entry var saveDocumentAction: (() -> Void)?
+    @Entry var exportDocumentAction: (() -> Void)?
 }

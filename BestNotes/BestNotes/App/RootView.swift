@@ -13,7 +13,7 @@ struct RootView: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var session: DocumentSession?
     @State private var isImporterPresented = false
-    @State private var openFailure: OpenFailure?
+    @State private var openFailure: ViewerFailure?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
@@ -33,7 +33,6 @@ struct RootView: View {
             onCompletion: handleImport
         )
         .focusedSceneValue(\.openDocumentAction, presentImporter)
-        .focusedSceneValue(\.documentSession, session)
         .alert(item: $openFailure) { failure in
             Alert(
                 title: Text(failure.message),
@@ -73,7 +72,7 @@ struct RootView: View {
             guard let url = urls.first else { return }
             open(url)
         case .failure(let error):
-            openFailure = OpenFailure(error: error)
+            openFailure = ViewerFailure(error: error)
         }
     }
 
@@ -83,22 +82,8 @@ struct RootView: View {
             session?.close()
             session = newSession
         } catch {
-            openFailure = OpenFailure(error: error)
+            openFailure = ViewerFailure(error: error)
         }
-    }
-}
-
-// MARK: - Fehleranzeige
-
-private struct OpenFailure: Identifiable {
-    let id = UUID()
-    let message: String
-    let suggestion: String?
-
-    init(error: Error) {
-        let localized = error as? LocalizedError
-        message = localized?.errorDescription ?? error.localizedDescription
-        suggestion = localized?.recoverySuggestion
     }
 }
 
