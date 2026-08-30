@@ -145,7 +145,7 @@ mit dem Pfad als Fallback.
 | Schritt | Inhalt | Status |
 |---|---|---|
 | 1 | Projekt-Setup, Struktur, Git, README | ✅ |
-| 2 | Minimaler PDF-Viewer (laden, anzeigen, Zoom/Scroll) | offen |
+| 2 | Minimaler PDF-Viewer (laden, anzeigen, Zoom/Scroll) | ✅ |
 | 3 | Annotationen: Highlight, Freihand, Textkommentar + Export | offen |
 | 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | offen |
 | 5 | Tab-Leiste fuer mehrere offene Dokumente | offen |

@@ -2,46 +2,103 @@
 //  RootView.swift
 //  BestNotes
 //
-//  Wurzel-Layout der App. Aktuell nur ein Geruest:
-//  links die spaetere Bibliothek (Schritt 4), rechts der
-//  Dokumentbereich mit Tab-Leiste (Schritt 5) und Viewer (Schritt 2).
+//  Wurzel-Layout. Haelt derzeit genau ein offenes Dokument; ab Schritt 5
+//  uebernimmt das eine Tab-Verwaltung.
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RootView: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var session: DocumentSession?
+    @State private var isImporterPresented = false
+    @State private var openFailure: OpenFailure?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            PlaceholderPane(
-                symbol: "sidebar.leading",
-                title: "Bibliothek",
-                subtitle: "Ordner & Notizbuecher — Schritt 4"
-            )
+            ContentUnavailableView {
+                Label("Bibliothek", systemImage: "sidebar.leading")
+            } description: {
+                Text("Ordner & Notizbuecher — Schritt 4")
+            }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
-            PlaceholderPane(
-                symbol: "doc.richtext",
-                title: "Kein Dokument geoeffnet",
-                subtitle: "PDF-Viewer — Schritt 2"
+            detail
+        }
+        .fileImporter(
+            isPresented: $isImporterPresented,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false,
+            onCompletion: handleImport
+        )
+        .focusedSceneValue(\.openDocumentAction, presentImporter)
+        .focusedSceneValue(\.documentSession, session)
+        .alert(item: $openFailure) { failure in
+            Alert(
+                title: Text(failure.message),
+                message: failure.suggestion.map(Text.init),
+                dismissButton: .default(Text("OK"))
             )
         }
-        .navigationTitle("BestNotes")
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let session {
+            DocumentViewerView(session: session)
+                .id(session.id)
+        } else {
+            ContentUnavailableView {
+                Label("Kein Dokument geoeffnet", systemImage: "doc.richtext")
+            } description: {
+                Text("Oeffne eine PDF-Datei, um sie anzusehen.")
+            } actions: {
+                Button("PDF oeffnen …", action: presentImporter)
+                    .buttonStyle(.borderedProminent)
+            }
+            .navigationTitle("BestNotes")
+        }
+    }
+
+    // MARK: - Oeffnen
+
+    private func presentImporter() {
+        isImporterPresented = true
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            open(url)
+        case .failure(let error):
+            openFailure = OpenFailure(error: error)
+        }
+    }
+
+    private func open(_ url: URL) {
+        do {
+            let newSession = try DocumentSession(url: url)
+            session?.close()
+            session = newSession
+        } catch {
+            openFailure = OpenFailure(error: error)
+        }
     }
 }
 
-private struct PlaceholderPane: View {
-    let symbol: String
-    let title: String
-    let subtitle: String
+// MARK: - Fehleranzeige
 
-    var body: some View {
-        ContentUnavailableView {
-            Label(title, systemImage: symbol)
-        } description: {
-            Text(subtitle)
-        }
+private struct OpenFailure: Identifiable {
+    let id = UUID()
+    let message: String
+    let suggestion: String?
+
+    init(error: Error) {
+        let localized = error as? LocalizedError
+        message = localized?.errorDescription ?? error.localizedDescription
+        suggestion = localized?.recoverySuggestion
     }
 }
 
