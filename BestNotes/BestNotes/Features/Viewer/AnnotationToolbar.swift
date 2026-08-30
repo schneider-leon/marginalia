@@ -14,6 +14,19 @@ struct AnnotationToolbar: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            if session.notebook != nil {
+                Picker("Modus", selection: $session.notebookMode) {
+                    ForEach(NotebookMode.allCases) { mode in
+                        Label(mode.label, systemImage: mode.symbol).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+
+                Divider().frame(height: 18)
+            }
+
             toolPicker
             Divider().frame(height: 18)
             styleControls

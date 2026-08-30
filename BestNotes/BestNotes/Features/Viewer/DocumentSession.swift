@@ -87,6 +87,28 @@ enum DocumentSessionError: LocalizedError {
     }
 }
 
+/// Womit man in einem Notizbuch gerade arbeitet.
+enum NotebookMode: String, CaseIterable, Identifiable {
+    case write
+    case annotate
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .write: "Schreiben"
+        case .annotate: "Annotieren"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .write: "keyboard"
+        case .annotate: "highlighter"
+        }
+    }
+}
+
 /// Ein angeklickter Punkt, fuer den noch der Kommentartext fehlt.
 struct PendingComment: Identifiable {
     let id = UUID()
@@ -120,6 +142,23 @@ final class DocumentSession: Identifiable {
 
     private(set) var hasUnsavedChanges = false
     var pendingComment: PendingComment?
+
+    // MARK: Notizbuch
+
+    var notebookMode: NotebookMode = .write
+
+    @ObservationIgnored
+    private(set) var textEngine: NotebookTextEngine?
+
+    /// Zuletzt bearbeitete Textansicht — die Formatierbefehle brauchen deren
+    /// Auswahl.
+    @ObservationIgnored
+    weak var activeTextView: NSTextView?
+
+    /// Spiegel der Seitenliste des Pakets, damit SwiftUI Seitenaenderungen sieht.
+    private(set) var pageDescriptors: [PageDescriptor] = []
+
+    var ruling: PageRuling = .none
 
     @ObservationIgnored
     weak var commandTarget: (any PDFViewCommandTarget)?
@@ -163,6 +202,88 @@ final class DocumentSession: Identifiable {
         self.document = package.pdf
         self.displayName = name
         undoManager.levelsOfUndo = 100
+
+        let engine = NotebookTextEngine(rtf: package.bodyRTF)
+        engine.updateContainers(sizes: package.textAreaSizes())
+        textEngine = engine
+        pageDescriptors = package.info.pages
+        ruling = package.info.ruling
+        engine.onEdited = { [weak self] in self?.textDidChange() }
+    }
+
+    // MARK: Notizbuch-Bearbeitung
+
+    /// Container an die Seiten angleichen und die Seitenliste spiegeln.
+    private func syncNotebookState() {
+        guard let package = notebook, let engine = textEngine else { return }
+        engine.updateContainers(sizes: package.textAreaSizes())
+        pageDescriptors = package.info.pages
+    }
+
+    private func textDidChange() {
+        hasUnsavedChanges = true
+        editRevision &+= 1
+        // Seiten erst im naechsten Durchlauf nachziehen: waehrend der
+        // Layout-Manager noch mit der Aenderung beschaeftigt ist, darf man
+        // ihm keine Container unter den Fuessen wegziehen.
+        Task { @MainActor [weak self] in self?.growPagesIfNeeded() }
+    }
+
+    /// Laeuft der Text hinter die letzte Seite, kommt eine dazu. Umgekehrt
+    /// wird *nicht* automatisch geloescht — eine Seite, die der Nutzer
+    /// angelegt hat, verschwindet nicht von selbst.
+    func growPagesIfNeeded() {
+        guard let package = notebook, let engine = textEngine else { return }
+        var added = 0
+        while engine.overflows, added < 200 {
+            guard (try? package.insertBlankPage()) != nil else { break }
+            engine.updateContainers(sizes: package.textAreaSizes())
+            added += 1
+        }
+        if added > 0 {
+            pageDescriptors = package.info.pages
+            hasUnsavedChanges = true
+        }
+    }
+
+    func insertBlankPage(after index: Int? = nil) {
+        guard let package = notebook else { return }
+        let position = index.map { $0 + 1 } ?? package.info.pages.count
+        try? package.insertBlankPage(at: position)
+        syncNotebookState()
+        hasUnsavedChanges = true
+        commandTarget?.refreshDisplay()
+    }
+
+    func removePage(at index: Int) {
+        guard let package = notebook, package.info.pages.count > 1 else { return }
+        package.removePage(at: index)
+        syncNotebookState()
+        hasUnsavedChanges = true
+        commandTarget?.refreshDisplay()
+    }
+
+    func setRuling(_ value: PageRuling) {
+        guard let package = notebook, value != ruling else { return }
+        ruling = value
+        package.setRuling(value)
+        hasUnsavedChanges = true
+    }
+
+    var selectedTextRange: NSRange {
+        activeTextView?.selectedRange() ?? NSRange(location: 0, length: 0)
+    }
+
+    func toggleBold() {
+        textEngine?.toggleTrait(.boldFontMask, in: selectedTextRange)
+    }
+
+    func toggleItalic() {
+        textEngine?.toggleTrait(.italicFontMask, in: selectedTextRange)
+    }
+
+    func setFontSize(_ size: CGFloat) {
+        textEngine?.setFontSize(size, in: selectedTextRange)
     }
 
     func close() {
@@ -294,6 +415,14 @@ final class DocumentSession: Identifiable {
 
     // MARK: Speichern & Export
 
+    /// Was exportiert wird: bei Notizbuechern die flachgerechnete Fassung,
+    /// in der getippter Text und Hilfslinien in der Seite stecken.
+    private func exportDocument() throws -> PDFDocument {
+        guard let package = notebook, let engine = textEngine else { return document }
+        package.setBodyRTF(engine.rtfData())
+        return try NotebookRenderer.flattened(package, engine: engine)
+    }
+
     /// Schreibt zurueck — in die PDF-Datei oder ins Notizbuchpaket.
     func save() throws {
         switch backing {
@@ -301,6 +430,7 @@ final class DocumentSession: Identifiable {
             try PDFExportService.write(document, to: url)
         case .notebook(let package):
             package.setTitle(displayName)
+            package.setBodyRTF(textEngine?.rtfData())
             package.markPDFDirty()
             try package.write()
         }
@@ -314,7 +444,7 @@ final class DocumentSession: Identifiable {
         guard let destination = PDFExportService.chooseExportURL(suggestedName: displayName) else {
             return nil
         }
-        try PDFExportService.write(document, to: destination)
+        try PDFExportService.write(try exportDocument(), to: destination)
         return destination
     }
 }

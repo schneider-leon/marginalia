@@ -95,7 +95,8 @@ sichtbar):
 Mathe-VL.bestnote/
 ├── info.json          # Schemaversion, Titel, IDs, Seitenreihenfolge, Seitentypen
 ├── content.pdf        # kanonischer Seitentraeger: importierte + leere Seiten
-├── overlays.json      # editierbare Textboxen & Bildplatzierungen pro Seite
+├── body.rtf           # der durchlaufende Text des Notizbuchs
+├── overlays.json      # Bildplatzierungen pro Seite
 └── assets/            # eingefuegte Originalbilder (unveraendert)
 ```
 
@@ -129,16 +130,40 @@ Schreiben — beim Speichern wird nur der geaenderte Teilbaum ersetzt, statt ein
 byteweise kopiert, nicht neu encodiert: Textebene, Lesezeichen und Dateigroesse
 bleiben erhalten.
 
+### 3a. Getippter Text: ein Fluss ueber viele Seiten
+
+Ein Notizbuch hat **einen** Textspeicher, nicht pro Seite einen Kasten. Ein
+`NSTextStorage` laeuft ueber mehrere seitengrosse `NSTextContainer` an einem
+gemeinsamen `NSLayoutManager` — das Modell, mit dem Textverarbeitungen Seiten
+umbrechen. Wer auf Seite 2 eine Zeile einfuegt, schiebt den Rest ueber den
+Seitenrand auf Seite 3.
+
+Bewusst TextKit 1: mehrere Container an einem Layout-Manager sind dort der
+vorgesehene Weg, und derselbe Layout-Manager traegt beides — die Bearbeitung im
+`NSTextView` und das Zeichnen beim Export.
+
+Der Fluss laeuft nur ueber **leere** Seiten. Importierte PDF-Seiten haben keinen
+Container; der Text fliesst an ihnen vorbei zur naechsten leeren Seite. Laeuft er
+hinter die letzte Seite, waechst automatisch eine nach. Umgekehrt wird nie
+automatisch geloescht — eine Seite, die der Nutzer angelegt hat, verschwindet
+nicht von selbst.
+
+Folge daraus: eine *mitten* in den Fluss eingefuegte Seite bleibt nicht leer, der
+Text rueckt nach. Eine wirklich leere Seite bekommt man am Ende des Notizbuchs.
+
 ### 4. Zwei Arten von „Annotation“ — bewusst getrennt
 
 | | Speicherung | Warum |
 |---|---|---|
 | Highlight, Freihand, Notizzettel auf PDF-Seiten | echte `PDFAnnotation` in `content.pdf` | PDFKit kann das nativ, ist standardkonform und ueberlebt den Export ohne Zutun |
-| Getippte Textbloecke, platzierte Bilder | eigenes Modell in `overlays.json` | bleibt beliebig editierbar; wird beim Export ins PDF **eingebrannt** |
+| Getippter Fliesstext | `body.rtf` + Layout zur Laufzeit | bleibt beliebig editierbar und umbruchfaehig; wird beim Export ins PDF **eingebrannt** |
+| Platzierte Bilder | eigenes Modell in `overlays.json` | bleibt beliebig verschiebbar; wird beim Export ins PDF **eingebrannt** |
 
-Export (Schritt 7) = Kopie von `content.pdf` anlegen → Overlays per Core Graphics in
-die jeweilige Seite rendern → Annotationen bleiben, wo sie sind → fertige PDF schreiben.
-Der Nutzer bekommt eine flache, ueberall lesbare PDF; die Arbeitskopie bleibt editierbar.
+Export = neues PDF-Dokument aufbauen: pro Seite erst die Originalseite samt ihrer
+PDF-Annotationen zeichnen, dann Hilfslinien und den Text dieser Seite darueber.
+Der Text wird dabei als **echter Text** gezeichnet, nicht als Bild — Suchen und
+Kopieren funktionieren im Ergebnis weiter. Die Arbeitskopie im Paket bleibt
+editierbar.
 
 ### 5. SwiftData ist der Index, nicht der Speicher
 
@@ -171,7 +196,7 @@ aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 | 5 | Tab-Leiste fuer mehrere offene Dokumente | ✅ |
 | 6a | `.bestnote`-Format: Lesen, Schreiben, Reparatur | ✅ |
 | 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | ✅ |
-| 7 | Leere Seiten, Textoverlays, Einbrennen beim Export | offen |
+| 7 | Leere Seiten, durchlaufender Text, Einbrennen beim Export | ✅ |
 | 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | offen |
 | 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |
 

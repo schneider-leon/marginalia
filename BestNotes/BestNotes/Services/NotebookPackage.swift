@@ -57,6 +57,7 @@ final class NotebookPackage {
         static let info = "info.json"
         static let content = "content.pdf"
         static let overlays = "overlays.json"
+        static let body = "body.rtf"
         static let assets = "assets"
     }
 
@@ -64,6 +65,10 @@ final class NotebookPackage {
     private(set) var info: NotebookInfo
     private(set) var pdf: PDFDocument
     var overlays: OverlayDocument
+
+    /// Der durchlaufende Text des Notizbuchs als RTF. `nil` heisst: noch nie
+    /// getippt.
+    private(set) var bodyRTF: Data?
 
     /// Nicht-fatale Auffaelligkeiten beim Lesen — z. B. reparierte
     /// Seitenbeschreibungen. Fuer die Fehleranzeige in Schritt 9.
@@ -77,12 +82,42 @@ final class NotebookPackage {
     /// haben — bei grossen Skripten ist das der teure Teil.
     private var pdfNeedsRewrite: Bool
 
-    private init(url: URL, info: NotebookInfo, pdf: PDFDocument, overlays: OverlayDocument, pdfNeedsRewrite: Bool) {
+    private init(
+        url: URL,
+        info: NotebookInfo,
+        pdf: PDFDocument,
+        overlays: OverlayDocument,
+        bodyRTF: Data?,
+        pdfNeedsRewrite: Bool
+    ) {
         self.url = url
         self.info = info
         self.pdf = pdf
         self.overlays = overlays
+        self.bodyRTF = bodyRTF
         self.pdfNeedsRewrite = pdfNeedsRewrite
+    }
+
+    /// Seiten, auf denen getippt wird — der Text fliesst an importierten
+    /// PDF-Seiten vorbei.
+    var writablePageIndices: [Int] {
+        info.pages.enumerated().compactMap { $0.element.kind == .blank ? $0.offset : nil }
+    }
+
+    /// Schreibflaechen der beschreibbaren Seiten, in Dokumentreihenfolge.
+    func textAreaSizes() -> [CGSize] {
+        writablePageIndices.map { index in
+            let size = pdf.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
+            return info.textInsets.textAreaSize(for: size)
+        }
+    }
+
+    func setBodyRTF(_ data: Data?) {
+        bodyRTF = data
+    }
+
+    func setRuling(_ ruling: PageRuling) {
+        info.ruling = ruling
     }
 
     var title: String { info.title }
@@ -109,6 +144,7 @@ final class NotebookPackage {
             info: info,
             pdf: pdf,
             overlays: OverlayDocument(),
+            bodyRTF: nil,
             pdfNeedsRewrite: true
         )
         try package.write()
@@ -164,6 +200,7 @@ final class NotebookPackage {
             info: info,
             pdf: pdf,
             overlays: overlays,
+            bodyRTF: try? Data(contentsOf: url.appending(path: Component.body)),
             pdfNeedsRewrite: false
         )
         package.loadWarnings = warnings
@@ -231,6 +268,9 @@ final class NotebookPackage {
 
         try encoder.encode(info).write(to: staging.appending(path: Component.info))
         try encoder.encode(overlays).write(to: staging.appending(path: Component.overlays))
+        if let bodyRTF {
+            try bodyRTF.write(to: staging.appending(path: Component.body))
+        }
 
         let stagedContent = staging.appending(path: Component.content)
         let existingContent = url.appending(path: Component.content)

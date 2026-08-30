@@ -101,7 +101,12 @@ struct RootView: View {
     @ViewBuilder
     private func content(for tab: DocumentTab) -> some View {
         if let session = tab.session {
-            DocumentViewerView(session: session)
+            if session.notebook != nil, session.notebookMode == .write {
+                NotebookEditorView(session: session)
+                    .focusedSceneValue(\.documentSession, session)
+            } else {
+                DocumentViewerView(session: session)
+            }
         } else {
             ContentUnavailableView {
                 Label(tab.title, systemImage: tab.symbol)
