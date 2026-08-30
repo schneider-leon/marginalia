@@ -147,7 +147,7 @@ mit dem Pfad als Fallback.
 | 1 | Projekt-Setup, Struktur, Git, README | ✅ |
 | 2 | Minimaler PDF-Viewer (laden, anzeigen, Zoom/Scroll) | ✅ |
 | 3 | Annotationen: Highlight, Freihand, Textkommentar + Export | ✅ |
-| 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | offen |
+| 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | ✅ |
 | 5 | Tab-Leiste fuer mehrere offene Dokumente | offen |
 | 6 | `.bestnote`-Format + SwiftData-Bibliothek | offen |
 | 7 | Leere Seiten, Textoverlays, Einbrennen beim Export | offen |

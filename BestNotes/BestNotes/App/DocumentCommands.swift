@@ -17,7 +17,7 @@ struct DocumentCommands: Commands {
     var body: some Commands {
         // „Neu“ ergibt erst mit dem Notizbuchformat (Schritt 6) Sinn.
         CommandGroup(replacing: .newItem) {
-            Button("PDF oeffnen …") { openDocument?() }
+            Button("PDF importieren …") { openDocument?() }
                 .keyboardShortcut("o", modifiers: .command)
                 .disabled(openDocument == nil)
         }
