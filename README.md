@@ -96,9 +96,20 @@ Mathe-VL.bestnote/
 ├── info.json          # Schemaversion, Titel, IDs, Seitenreihenfolge, Seitentypen
 ├── content.pdf        # kanonischer Seitentraeger: importierte + leere Seiten
 ├── overlays.json      # editierbare Textboxen & Bildplatzierungen pro Seite
-├── assets/            # eingefuegte Originalbilder (unveraendert)
-└── thumbnails/        # Cache, regenerierbar, nicht versionsrelevant
+└── assets/            # eingefuegte Originalbilder (unveraendert)
 ```
+
+Die Pakete liegen im Sandbox-Container unter `Documents/Library/<uuid>.bestnote`.
+Der Dateiname kommt aus der Notizbuch-ID, nicht aus dem Titel: Umbenennen soll
+keine Datei verschieben, und zwei gleichnamige Notizbuecher duerfen nebeneinander
+existieren. `.bestnote` ist in `Info.plist` als exportierter UTType deklariert und
+konform zu `com.apple.package` — der Finder zeigt das Verzeichnis als eine Datei.
+
+Beide JSON-Dateien haben eine **explizit geschriebene** Kodierung: Swifts
+synthetisierte Enum-Form (`{"text": {"_0": …}}`) und `CGRect` als
+`[[x,y],[w,h]]` waeren beide schlecht les- und schlecht versionierbar.
+`OverlayContent` bekommt stattdessen einen `type`-Diskriminator, `frame` benannte
+Felder.
 
 **Warum ein Paket und nicht eine einzelne PDF?**
 Eine reine PDF koennte fast alles per PDF-Annotation abbilden, aber getippter Text
@@ -149,7 +160,8 @@ mit dem Pfad als Fallback.
 | 3 | Annotationen: Highlight, Freihand, Textkommentar + Export | ✅ |
 | 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | ✅ |
 | 5 | Tab-Leiste fuer mehrere offene Dokumente | ✅ |
-| 6 | `.bestnote`-Format + SwiftData-Bibliothek | offen |
+| 6a | `.bestnote`-Format: Lesen, Schreiben, Reparatur | ✅ |
+| 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | offen |
 | 7 | Leere Seiten, Textoverlays, Einbrennen beim Export | offen |
 | 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | offen |
 | 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |
