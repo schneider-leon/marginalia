@@ -112,6 +112,17 @@ final class NotebookPackage {
         }
     }
 
+    func pageID(at index: Int) -> UUID? {
+        info.pages.indices.contains(index) ? info.pages[index].id : nil
+    }
+
+    func imageOverlays(atPageIndex index: Int) -> [Overlay] {
+        guard let pageID = pageID(at: index) else { return [] }
+        return overlays.sortedOverlays(for: pageID).filter {
+            if case .image = $0.content { return true } else { return false }
+        }
+    }
+
     func setBodyRTF(_ data: Data?) {
         bodyRTF = data
     }

@@ -14,6 +14,7 @@
 import AppKit
 import PDFKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Hintergrund
 
@@ -23,6 +24,9 @@ final class NotebookPageBackgroundView: NSView {
     var insets: TextInsets = .standard
     var lineHeight: CGFloat = 16
 
+    var onDropImageData: ((Data, String) -> Void)?
+    var onDropFileURL: ((URL) -> Void)?
+
     override var isFlipped: Bool { true }
 
     /// Eine Seite ist weisses Papier, unabhaengig vom Systemdesign. Ohne das
@@ -31,11 +35,55 @@ final class NotebookPageBackgroundView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         appearance = NSAppearance(named: .aqua)
+        registerForDraggedTypes([.fileURL, .png, .tiff])
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         appearance = NSAppearance(named: .aqua)
+        registerForDraggedTypes([.fileURL, .png, .tiff])
+    }
+
+    // MARK: - Drag & Drop
+    //
+    // Der Drop haengt an der Hintergrundansicht, weil die immer getroffen
+    // wird — die Bildebene darueber meldet sich fuer leere Stellen bewusst
+    // als nicht zustaendig.
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        droppableImageURL(sender) != nil || droppableImageData(sender) != nil ? .copy : []
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        draggingEntered(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let url = droppableImageURL(sender) {
+            onDropFileURL?(url)
+            return true
+        }
+        if let (data, ext) = droppableImageData(sender) {
+            onDropImageData?(data, ext)
+            return true
+        }
+        return false
+    }
+
+    private func droppableImageURL(_ sender: any NSDraggingInfo) -> URL? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true,
+            .urlReadingContentsConformToTypes: [UTType.image.identifier]
+        ]
+        return (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options)
+            as? [URL])?.first
+    }
+
+    private func droppableImageData(_ sender: any NSDraggingInfo) -> (Data, String)? {
+        let board = sender.draggingPasteboard
+        if let data = board.data(forType: .png) { return (data, "png") }
+        if let data = board.data(forType: .tiff) { return (data, "tiff") }
+        return nil
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -74,6 +122,9 @@ struct NotebookPageView: NSViewRepresentable {
     let pageSize: CGSize
     let ruling: PageRuling
     let insets: TextInsets
+    /// Nur damit SwiftUI ein Update ausloest, wenn sich Bilder aendern.
+    let overlayRevision: Int
+    let selectedOverlayID: UUID?
 
     func makeNSView(context: Context) -> NotebookPageBackgroundView {
         let view = NotebookPageBackgroundView()
@@ -98,8 +149,32 @@ struct NotebookPageView: NSViewRepresentable {
             textView.typingAttributes = NotebookTextEngine.defaultAttributes
             textView.appearance = NSAppearance(named: .aqua)
             textView.insertionPointColor = .black
+            // Textdrops darf die Textansicht behalten, Bilder und Dateien
+            // sollen an die Seite durchfallen.
+            textView.unregisterDraggedTypes()
+            textView.registerForDraggedTypes([.string])
             view.addSubview(textView)
             context.coordinator.textView = textView
+        }
+
+        // Zuletzt hinzugefuegt heisst: ganz oben.
+        let overlayView = ImageOverlayNSView()
+        overlayView.session = session
+        overlayView.pageIndex = pageIndex
+        overlayView.pageSize = pageSize
+        overlayView.frame = CGRect(origin: .zero, size: pageSize)
+        view.addSubview(overlayView)
+        context.coordinator.overlayView = overlayView
+
+        view.onDropFileURL = { [weak session] url in
+            guard let session else { return }
+            session.activePageIndex = pageIndex
+            try? session.insertImage(from: url, atPageIndex: pageIndex)
+        }
+        view.onDropImageData = { [weak session] data, ext in
+            guard let session else { return }
+            session.activePageIndex = pageIndex
+            session.insertImage(data: data, fileExtension: ext, atPageIndex: pageIndex)
         }
         return view
     }
@@ -107,6 +182,11 @@ struct NotebookPageView: NSViewRepresentable {
     func updateNSView(_ nsView: NotebookPageBackgroundView, context: Context) {
         configure(nsView, context: context)
         context.coordinator.textView?.frame = textFrame()
+        if let overlayView = context.coordinator.overlayView {
+            overlayView.pageSize = pageSize
+            overlayView.frame = CGRect(origin: .zero, size: pageSize)
+            overlayView.needsDisplay = true
+        }
         nsView.needsDisplay = true
     }
 
@@ -136,6 +216,7 @@ struct NotebookPageView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         private let session: DocumentSession
         weak var textView: NSTextView?
+        weak var overlayView: ImageOverlayNSView?
 
         init(session: DocumentSession) {
             self.session = session

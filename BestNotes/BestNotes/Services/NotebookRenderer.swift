@@ -52,7 +52,22 @@ enum NotebookRenderer {
             page.draw(with: .cropBox, to: context)
             context.restoreGState()
 
-            // 2. Alles Weitere in einem oben-links-Koordinatensystem, weil
+            // 2. Bilder — in PDF-Koordinaten, also ohne Umrechnung.
+            if let pageID = package.pageID(at: index) {
+                for overlay in package.overlays.sortedOverlays(for: pageID) {
+                    guard case .image(let content) = overlay.content,
+                          let data = package.assetData(named: content.assetName),
+                          let image = NSImage(data: data),
+                          let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                    else { continue }
+                    context.saveGState()
+                    context.setAlpha(content.opacity)
+                    context.draw(cgImage, in: overlay.frame)
+                    context.restoreGState()
+                }
+            }
+
+            // 3. Alles Weitere in einem oben-links-Koordinatensystem, weil
             //    NSLayoutManager so zeichnet. PDF rechnet von unten links.
             context.saveGState()
             context.translateBy(x: 0, y: box.height)

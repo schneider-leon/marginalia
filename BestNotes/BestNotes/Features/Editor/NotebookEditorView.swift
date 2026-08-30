@@ -9,6 +9,7 @@
 import AppKit
 import PDFKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NotebookEditorView: View {
     @Bindable var session: DocumentSession
@@ -54,6 +55,20 @@ struct NotebookEditorView: View {
         do { try session.exportCopy() } catch { failure = ViewerFailure(error: error) }
     }
 
+    private func insertImage(onPage index: Int) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.title = "Bild einfuegen"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let page = min(max(index, 0), max(session.pageDescriptors.count - 1, 0))
+            try session.insertImage(from: url, atPageIndex: page)
+        } catch {
+            failure = ViewerFailure(error: error)
+        }
+    }
+
     private var subtitle: String {
         let pages = "\(session.pageDescriptors.count) Seiten"
         return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
@@ -70,7 +85,9 @@ struct NotebookEditorView: View {
             containerIndex: containerIndex,
             pageSize: size,
             ruling: session.ruling,
-            insets: session.notebook?.info.textInsets ?? .standard
+            insets: session.notebook?.info.textInsets ?? .standard,
+            overlayRevision: session.overlayRevision,
+            selectedOverlayID: session.selectedOverlayID
         )
         .frame(width: size.width, height: size.height)
         .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
@@ -82,6 +99,8 @@ struct NotebookEditorView: View {
                 .offset(y: 20)
         }
         .contextMenu {
+            Button("Bild einfuegen …") { insertImage(onPage: index) }
+            Divider()
             Button("Leere Seite danach einfuegen") { session.insertBlankPage(after: index) }
             Button("Seite loeschen", role: .destructive) { session.removePage(at: index) }
                 .disabled(session.pageDescriptors.count < 2)
@@ -109,6 +128,13 @@ struct NotebookEditorView: View {
                 Label("Seite anhaengen", systemImage: "plus.rectangle.portrait")
             }
             .help("Leere Seite am Ende anhaengen")
+
+            Button {
+                insertImage(onPage: session.activePageIndex)
+            } label: {
+                Label("Bild einfuegen", systemImage: "photo.badge.plus")
+            }
+            .help("Bild auf der aktuellen Seite einfuegen — oder eine Datei auf die Seite ziehen")
 
             Divider().frame(height: 18)
 

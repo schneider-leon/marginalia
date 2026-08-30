@@ -160,6 +160,19 @@ final class DocumentSession: Identifiable {
 
     var ruling: PageRuling = .none
 
+    /// Seite, auf der zuletzt gearbeitet wurde — dorthin landen eingefuegte
+    /// Bilder ohne weitere Angabe.
+    var activePageIndex = 0
+
+    /// Zaehler, damit SwiftUI Bildaenderungen sieht; das Paket ist nicht
+    /// observierbar.
+    private(set) var overlayRevision = 0
+
+    var selectedOverlayID: UUID?
+
+    @ObservationIgnored
+    private var imageCache: [String: NSImage] = [:]
+
     @ObservationIgnored
     weak var commandTarget: (any PDFViewCommandTarget)?
 
@@ -268,6 +281,122 @@ final class DocumentSession: Identifiable {
         ruling = value
         package.setRuling(value)
         hasUnsavedChanges = true
+    }
+
+    // MARK: Bilder
+
+    func image(forAsset name: String) -> NSImage? {
+        if let cached = imageCache[name] { return cached }
+        guard let data = notebook?.assetData(named: name), let image = NSImage(data: data) else {
+            return nil
+        }
+        imageCache[name] = image
+        return image
+    }
+
+    func imageOverlays(atPageIndex index: Int) -> [Overlay] {
+        notebook?.imageOverlays(atPageIndex: index) ?? []
+    }
+
+    @discardableResult
+    func insertImage(from url: URL, atPageIndex index: Int) throws -> UUID? {
+        let access = SecurityScopedAccess(url: url)
+        defer { access.release() }
+        let data = try Data(contentsOf: url)
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
+        return insertImage(data: data, fileExtension: ext, atPageIndex: index)
+    }
+
+    @discardableResult
+    func insertImage(data: Data, fileExtension: String, atPageIndex index: Int) -> UUID? {
+        guard let package = notebook,
+              let pageID = package.pageID(at: index),
+              let image = NSImage(data: data),
+              image.size.width > 0, image.size.height > 0
+        else { return nil }
+
+        let name = package.addAsset(data: data, fileExtension: fileExtension)
+        imageCache[name] = image
+
+        let pageSize = document.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
+        let overlay = Overlay(
+            frame: Self.initialFrame(for: image.size, on: pageSize),
+            zIndex: (package.overlays[pageID].map(\.zIndex).max() ?? 0) + 1,
+            content: .image(ImageOverlayContent(assetName: name))
+        )
+        addOverlay(overlay, pageID: pageID, actionName: "Bild einfuegen")
+        selectedOverlayID = overlay.id
+        return overlay.id
+    }
+
+    /// Haelt das Seitenverhaeltnis und passt in die halbe Seitenbreite —
+    /// eine Bildschirmaufnahme soll nicht ueber den Rand hinausragen.
+    private static func initialFrame(for imageSize: CGSize, on pageSize: CGSize) -> CGRect {
+        let maxWidth = pageSize.width * 0.5
+        let maxHeight = pageSize.height * 0.5
+        let scale = min(maxWidth / imageSize.width, maxHeight / imageSize.height, 1)
+        let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        return CGRect(
+            x: (pageSize.width - size.width) / 2,
+            y: (pageSize.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    func addOverlay(_ overlay: Overlay, pageID: UUID, actionName: String) {
+        guard let package = notebook else { return }
+        package.overlays[pageID] = package.overlays[pageID] + [overlay]
+        undoManager.setActionName(actionName)
+        undoManager.registerUndo(withTarget: self) { session in
+            session.removeOverlay(id: overlay.id, pageID: pageID, actionName: actionName)
+        }
+        overlayDidChange()
+    }
+
+    func removeOverlay(id: UUID, pageID: UUID, actionName: String = "Bild entfernen") {
+        guard let package = notebook,
+              let existing = package.overlays[pageID].first(where: { $0.id == id })
+        else { return }
+        package.overlays[pageID] = package.overlays[pageID].filter { $0.id != id }
+        undoManager.setActionName(actionName)
+        undoManager.registerUndo(withTarget: self) { session in
+            session.addOverlay(existing, pageID: pageID, actionName: actionName)
+        }
+        if selectedOverlayID == id { selectedOverlayID = nil }
+        overlayDidChange()
+    }
+
+    func removeSelectedOverlay(atPageIndex index: Int) {
+        guard let id = selectedOverlayID, let pageID = notebook?.pageID(at: index) else { return }
+        removeOverlay(id: id, pageID: pageID)
+    }
+
+    /// Waehrend des Ziehens: nur setzen, kein Undo-Schritt pro Mausbewegung.
+    func previewOverlayFrame(id: UUID, frame: CGRect, atPageIndex index: Int) {
+        guard let package = notebook, let pageID = package.pageID(at: index) else { return }
+        var list = package.overlays[pageID]
+        guard let position = list.firstIndex(where: { $0.id == id }) else { return }
+        list[position].frame = frame
+        package.overlays[pageID] = list
+        overlayRevision &+= 1
+    }
+
+    /// Nach dem Loslassen: ein Undo-Schritt fuer die gesamte Bewegung.
+    func commitOverlayFrame(id: UUID, from oldFrame: CGRect, to newFrame: CGRect, atPageIndex index: Int) {
+        guard oldFrame != newFrame, let pageID = notebook?.pageID(at: index) else { return }
+        previewOverlayFrame(id: id, frame: newFrame, atPageIndex: index)
+        undoManager.setActionName("Bild bewegen")
+        undoManager.registerUndo(withTarget: self) { session in
+            session.commitOverlayFrame(id: id, from: newFrame, to: oldFrame, atPageIndex: index)
+        }
+        overlayDidChange()
+    }
+
+    private func overlayDidChange() {
+        overlayRevision &+= 1
+        hasUnsavedChanges = true
+        editRevision &+= 1
     }
 
     var selectedTextRange: NSRange {

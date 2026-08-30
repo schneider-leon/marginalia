@@ -151,13 +151,29 @@ nicht von selbst.
 Folge daraus: eine *mitten* in den Fluss eingefuegte Seite bleibt nicht leer, der
 Text rueckt nach. Eine wirklich leere Seite bekommt man am Ende des Notizbuchs.
 
+### 3b. Bilder
+
+Bilder liegen als Overlay ueber der Seite, mit Rahmen in PDF-Punkten. Die
+Originaldatei wandert unveraendert nach `assets/`; `overlays.json` haelt nur
+Dateinamen, Rahmen und Deckkraft. Verschieben und Skalieren aendern also nie
+die Bilddaten.
+
+Die Bedienung sitzt in einer eigenen `NSView` **ueber** der Textansicht. Deren
+`hitTest` meldet sich nur fuer Punkte auf einem Bild oder einem Anfasser
+zustaendig und gibt sonst `nil` zurueck — der Klick faellt dann durch und landet
+im Text. Eine SwiftUI-Ueberlagerung koennte das nicht so genau trennen.
+
+Drops nimmt dagegen die *Hintergrund*ansicht entgegen, weil die immer getroffen
+wird. Damit Dateien nicht vorher in der Textansicht landen, nimmt die nur noch
+Text-Drops an.
+
 ### 4. Zwei Arten von „Annotation“ — bewusst getrennt
 
 | | Speicherung | Warum |
 |---|---|---|
 | Highlight, Freihand, Notizzettel auf PDF-Seiten | echte `PDFAnnotation` in `content.pdf` | PDFKit kann das nativ, ist standardkonform und ueberlebt den Export ohne Zutun |
 | Getippter Fliesstext | `body.rtf` + Layout zur Laufzeit | bleibt beliebig editierbar und umbruchfaehig; wird beim Export ins PDF **eingebrannt** |
-| Platzierte Bilder | eigenes Modell in `overlays.json` | bleibt beliebig verschiebbar; wird beim Export ins PDF **eingebrannt** |
+| Platzierte Bilder | `overlays.json` + Originaldatei in `assets/` | bleibt beliebig verschiebbar und skalierbar; wird beim Export ins PDF **eingebrannt** |
 
 Export = neues PDF-Dokument aufbauen: pro Seite erst die Originalseite samt ihrer
 PDF-Annotationen zeichnen, dann Hilfslinien und den Text dieser Seite darueber.
@@ -197,7 +213,7 @@ aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 | 6a | `.bestnote`-Format: Lesen, Schreiben, Reparatur | ✅ |
 | 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | ✅ |
 | 7 | Leere Seiten, durchlaufender Text, Einbrennen beim Export | ✅ |
-| 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | offen |
+| 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | ✅ |
 | 9 | Persistenz haerten, Fehlerbehandlung, Refactoring | offen |
 
 ## Tastenkuerzel
