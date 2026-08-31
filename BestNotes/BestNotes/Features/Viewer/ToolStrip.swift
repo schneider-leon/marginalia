@@ -29,6 +29,19 @@ struct ToolGroup<Content: View>: View {
     }
 }
 
+/// Trennstrich zwischen zwei Werkzeugen innerhalb einer `ToolGroup` — so
+/// kurz wie die Trenner eines segmentierten Waehlers.
+///
+/// Bewusst von Hand gesetzt statt automatisch zwischen alle Kinder
+/// eingeschoben: dafuer muesste `ToolGroup` den Inhalt aufbrechen, und das
+/// geht nur ueber nicht-oeffentliche SwiftUI-Interna.
+struct ToolGroupDivider: View {
+    var body: some View {
+        Divider()
+            .frame(height: 14)
+    }
+}
+
 struct ToolStrip<Content: View>: View {
     @ViewBuilder let content: () -> Content
 

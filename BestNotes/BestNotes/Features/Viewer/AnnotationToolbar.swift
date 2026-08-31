@@ -105,6 +105,8 @@ struct AnnotationToolbar: View {
                 }
                 .disabled(!session.canUndo)
 
+                ToolGroupDivider()
+
                 Button(action: session.redo) {
                     Label("Wiederholen", systemImage: "arrow.uturn.forward")
                         .frame(width: 24, height: 20)

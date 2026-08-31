@@ -214,6 +214,8 @@ struct NotebookEditorView: View {
                 .fixedSize()
                 .help("Leere Seite einfuegen")
 
+                ToolGroupDivider()
+
                 Button {
                     insertImage(onPage: currentPageIndex)
                 } label: {
@@ -259,11 +261,14 @@ struct NotebookEditorView: View {
     private var formatGroup: some View {
         ToolGroup {
             formatToggle("Fett", symbol: "bold", isOn: session.isBoldActive, action: session.toggleBold)
+            ToolGroupDivider()
             formatToggle("Kursiv", symbol: "italic", isOn: session.isItalicActive, action: session.toggleItalic)
+            ToolGroupDivider()
             formatToggle(
                 "Unterstrichen", symbol: "underline",
                 isOn: session.isUnderlineActive, action: session.toggleUnderline
             )
+            ToolGroupDivider()
 
             Menu {
                 ForEach([9, 10, 11, 12, 13, 14, 18, 24, 36], id: \.self) { size in
