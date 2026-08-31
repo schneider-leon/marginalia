@@ -45,6 +45,18 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
 
     var isEditing: Bool { textView != nil }
 
+    /// Wurde die Eingabe beendet, weil die Ansicht den Fokus verloren hat?
+    ///
+    /// Der Klick, der das ausgeloest hat, soll keinen neuen Zettel anlegen —
+    /// und je nach Reihenfolge der Ereignisse ist die Eingabe schon vorbei,
+    /// bevor unser `mouseDown` laeuft.
+    private var endedByFocusLoss = false
+
+    func consumeFocusLossFinish() -> Bool {
+        defer { endedByFocusLoss = false }
+        return endedByFocusLoss
+    }
+
     func begin(
         editing annotation: PDFAnnotation,
         on page: PDFPage,
@@ -60,6 +72,7 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
         self.page = page
         self.originalText = annotation.contents
         self.isNewNote = isNew
+        self.endedByFocusLoss = false
 
         let field = makeTextView(for: annotation, style: style)
         documentView.addSubview(field)
@@ -120,13 +133,35 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
     }
 
     func textDidEndEditing(_ notification: Notification) {
+        endedByFocusLoss = true
         finish()
     }
 
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        guard selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
-        finish()
-        return true
+        switch selector {
+        case #selector(NSResponder.cancelOperation(_:)):
+            finish()
+            return true
+
+        case #selector(NSResponder.insertNewline(_:)):
+            // Return schliesst den Zettel ab, Umschalt-Return macht eine
+            // neue Zeile. Manche Tastaturbelegungen schicken auch fuer
+            // Umschalt-Return dieses Kommando — deshalb der Blick auf die
+            // Modifikatoren statt Verlass auf das Kommando allein.
+            if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {
+                textView.insertText("\n", replacementRange: textView.selectedRange())
+            } else {
+                finish()
+            }
+            return true
+
+        case #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            textView.insertText("\n", replacementRange: textView.selectedRange())
+            return true
+
+        default:
+            return false
+        }
     }
 
     @discardableResult

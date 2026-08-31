@@ -75,7 +75,7 @@ struct AnnotationToolbar: View {
             }
             .fixedSize()
 
-            Text("Feld aufziehen und schreiben; Zettel lassen sich ziehen.")
+            Text("Enter schliesst ab, Umschalt-Enter macht eine neue Zeile.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 

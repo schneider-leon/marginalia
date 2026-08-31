@@ -246,7 +246,12 @@ final class AnnotatingPDFView: PDFView {
     /// Auf einem vorhandenen Zettel beginnt ein Verschieben, sonst entsteht
     /// ein neuer und die Eingabe beginnt sofort.
     private func beginNoteInteraction(at point: CGPoint, on page: PDFPage) {
-        noteEditor.finish()
+        // Ein Klick, der eine laufende Eingabe beendet, legt noch keinen
+        // neuen Zettel an. Je nach Reihenfolge der Ereignisse hat AppKit die
+        // Eingabe schon beendet, bevor wir hier ankommen — beide Faelle
+        // muessen abgefangen werden.
+        if noteEditor.finish() { return }
+        if noteEditor.consumeFocusLossFinish() { return }
 
         if let hit = page.annotation(at: point), hit.type == "FreeText" {
             movingNote = (
