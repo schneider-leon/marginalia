@@ -427,6 +427,55 @@ final class NotebookPackage {
         pdfNeedsRewrite = true
     }
 
+    // MARK: - Textseiten fuer die Annotationsansicht
+    //
+    // Der getippte Text lebt in `body.rtf`, nicht in `content.pdf`. Die
+    // Annotationsansicht zeigt aber `content.pdf` — dort waeren die
+    // Textseiten leer. Beim Wechsel in den Annotationsmodus wird der Text
+    // deshalb in die Seiten eingebrannt, beim Zurueckwechseln wieder
+    // entfernt. Annotationen ziehen dabei mit um.
+
+    /// Tauscht eine Seite aus und nimmt ihre Annotationen mit.
+    private func replacePage(at index: Int, with page: PDFPage, owner: PDFDocument) {
+        guard let old = pdf.page(at: index) else { return }
+        let annotations = old.annotations
+        annotations.forEach(old.removeAnnotation)
+
+        pdf.removePage(at: index)
+        pdf.insert(page, at: index)
+        withExtendedLifetime(owner) {}
+
+        annotations.forEach(page.addAnnotation)
+        pdfNeedsRewrite = true
+    }
+
+    func burnTextIntoWritablePages(engine: NotebookTextEngine) {
+        for (containerIndex, pageIndex) in writablePageIndices.enumerated() {
+            let size = pdf.page(at: pageIndex)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
+            guard let rendered = NotebookRenderer.textPage(
+                size: size,
+                containerIndex: containerIndex,
+                engine: engine,
+                insets: info.textInsets,
+                ruling: info.ruling
+            ) else { continue }
+            replacePage(at: pageIndex, with: rendered.page, owner: rendered.owner)
+        }
+    }
+
+    /// Setzt die beschreibbaren Seiten auf leeres Papier zurueck.
+    ///
+    /// Auch beim Oeffnen noetig: liegt auf der Platte noch eine Fassung mit
+    /// eingebranntem Text, wuerde der Schreibmodus ihn doppelt zeigen —
+    /// einmal aus der Seite, einmal aus der Textansicht.
+    func clearWritablePages() {
+        for pageIndex in writablePageIndices {
+            let size = pdf.page(at: pageIndex)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
+            guard let blank = PDFPageFactory.blankPage(size: size) else { continue }
+            replacePage(at: pageIndex, with: blank.page, owner: blank.owner)
+        }
+    }
+
     /// Meldet, dass sich die Annotationen in `content.pdf` geaendert haben.
     func markPDFDirty() {
         pdfNeedsRewrite = true

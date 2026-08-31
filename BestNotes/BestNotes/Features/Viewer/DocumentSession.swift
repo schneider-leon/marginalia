@@ -150,7 +150,12 @@ final class DocumentSession: Identifiable {
 
     // MARK: Notizbuch
 
-    var notebookMode: NotebookMode = .write
+    var notebookMode: NotebookMode = .write {
+        didSet {
+            guard notebookMode != oldValue else { return }
+            applyModeRendering()
+        }
+    }
 
     @ObservationIgnored
     let textEngine: NotebookTextEngine
@@ -218,11 +223,26 @@ final class DocumentSession: Identifiable {
         self.textEngine = engine
 
         undoManager.levelsOfUndo = 100
+        // Auf der Platte koennen Textseiten mit eingebranntem Text liegen;
+        // im Schreibmodus kommt der Text aus der Textansicht.
+        package.clearWritablePages()
         loadWarnings = package.loadWarnings
         package.pruneUnreferencedAssets()
         pageDescriptors = package.info.pages
         ruling = package.info.ruling
         engine.onEdited = { [weak self] in self?.textDidChange() }
+    }
+
+    /// Beim Umschalten die Textseiten passend herrichten: eingebrannt fuer
+    /// die Annotationsansicht, leer fuer den Schreibmodus.
+    private func applyModeRendering() {
+        switch notebookMode {
+        case .annotate:
+            notebook.burnTextIntoWritablePages(engine: textEngine)
+        case .write:
+            notebook.clearWritablePages()
+        }
+        commandTarget?.refreshDisplay()
     }
 
     // MARK: Notizbuch-Bearbeitung

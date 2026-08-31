@@ -117,6 +117,75 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(session.pageDescriptors.last?.kind, .blank)
     }
 
+    /// Der getippte Text liegt in body.rtf, die Annotationsansicht zeigt
+    /// aber content.pdf — dort muss er beim Umschalten auftauchen.
+    func testTextErscheintImAnnotationsmodusInDerSeite() throws {
+        let package = try NotebookPackage.create(title: "Sichtbar", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Sichtbar")
+        session.textEngine.textStorage.setAttributedString(NSAttributedString(
+            string: "Diese Zeile muss auch beim Annotieren zu sehen sein.",
+            attributes: NotebookTextEngine.defaultAttributes
+        ))
+
+        XCTAssertEqual(TestSupport.inkPixelCount(in: package.pdf), 0, "Im Schreibmodus ist die Seite leer")
+
+        session.notebookMode = .annotate
+        // Eine Zeile Text ergibt ein paar hundert Pixel; entscheidend ist der
+        // Unterschied zur leeren Seite, nicht der genaue Wert.
+        XCTAssertGreaterThan(TestSupport.inkPixelCount(in: package.pdf), 100, "Der Text fehlt in der Seite")
+        XCTAssertTrue(
+            (package.pdf.page(at: 0)?.string ?? "").contains("auch beim Annotieren"),
+            "Als echter Text, damit Markieren funktioniert"
+        )
+
+        session.notebookMode = .write
+        XCTAssertEqual(TestSupport.inkPixelCount(in: package.pdf), 0, "Sonst stuende der Text doppelt da")
+    }
+
+    func testAnnotationenUeberlebenDenSeitentausch() throws {
+        let package = try NotebookPackage.create(title: "Annotiert", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Annotiert")
+        session.textEngine.textStorage.setAttributedString(NSAttributedString(
+            string: "Text", attributes: NotebookTextEngine.defaultAttributes
+        ))
+
+        session.notebookMode = .annotate
+        let ink = PDFAnnotation(
+            bounds: try XCTUnwrap(package.pdf.page(at: 0)).bounds(for: .cropBox),
+            forType: .ink, withProperties: nil
+        )
+        ink.color = .red
+        session.addAnnotations([ink], on: try XCTUnwrap(package.pdf.page(at: 0)), actionName: "Freihand")
+        XCTAssertEqual(package.pdf.page(at: 0)?.annotations.count, 1)
+
+        session.notebookMode = .write
+        XCTAssertEqual(package.pdf.page(at: 0)?.annotations.count, 1, "Beim Zuruecktauschen verloren")
+
+        session.notebookMode = .annotate
+        XCTAssertEqual(package.pdf.page(at: 0)?.annotations.count, 1)
+    }
+
+    /// Eine gespeicherte Fassung mit eingebranntem Text darf im Schreibmodus
+    /// nicht doppelt erscheinen.
+    func testEingebrannterTextWirdBeimOeffnenEntfernt() throws {
+        let package = try NotebookPackage.create(title: "Doppelt", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Doppelt")
+        session.textEngine.textStorage.setAttributedString(NSAttributedString(
+            string: "Gespeichert im Annotationsmodus.",
+            attributes: NotebookTextEngine.defaultAttributes
+        ))
+        session.notebookMode = .annotate
+        try session.save()
+        XCTAssertGreaterThan(TestSupport.inkPixelCount(in: package.pdf), 100)
+
+        let reopened = DocumentSession(
+            package: try NotebookPackage.read(from: package.url), name: "Doppelt"
+        )
+        XCTAssertEqual(reopened.notebookMode, .write)
+        XCTAssertEqual(TestSupport.inkPixelCount(in: reopened.notebook.pdf), 0)
+        XCTAssertEqual(reopened.textEngine.textStorage.string, "Gespeichert im Annotationsmodus.")
+    }
+
     /// Beide Modi teilen sich die Seitenposition — beim Umschalten darf die
     /// Ansicht nicht wieder vorne anfangen.
     func testSeitenpositionUeberlebtDenModuswechsel() throws {

@@ -106,6 +106,56 @@ enum NotebookRenderer {
         return document
     }
 
+    /// Eine einzelne Seite mit eingebranntem Text und Hilfslinien.
+    ///
+    /// Gibt Seite *und* erzeugendes Dokument zurueck: PDFKit kann eine Seite
+    /// ohne Dokument nicht zeichnen, der Aufrufer muss es bis zum Einfuegen
+    /// am Leben halten.
+    static func textPage(
+        size: CGSize,
+        containerIndex: Int,
+        engine: NotebookTextEngine,
+        insets: TextInsets,
+        ruling: PageRuling
+    ) -> (page: PDFPage, owner: PDFDocument)? {
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return nil }
+        var box = CGRect(origin: .zero, size: size)
+        guard let context = CGContext(consumer: consumer, mediaBox: &box, nil) else { return nil }
+
+        context.beginPDFPage(nil)
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(box)
+
+        context.saveGState()
+        context.translateBy(x: 0, y: box.height)
+        context.scaleBy(x: 1, y: -1)
+
+        let previous = NSGraphicsContext.current
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+
+        let origin = CGPoint(x: insets.leading, y: insets.top)
+        let area = CGRect(origin: origin, size: insets.textAreaSize(for: box.size))
+        let paper = NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
+        paper.performAsCurrentDrawingAppearance {
+            drawRuling(ruling, in: area, lineHeight: lineHeight(of: engine))
+            if let range = engine.glyphRange(forContainerAt: containerIndex), range.length > 0 {
+                engine.layoutManager.drawBackground(forGlyphRange: range, at: origin)
+                engine.layoutManager.drawGlyphs(forGlyphRange: range, at: origin)
+            }
+        }
+
+        NSGraphicsContext.current = previous
+        context.restoreGState()
+        context.endPDFPage()
+        context.closePDF()
+
+        guard let document = PDFDocument(data: data as Data), let page = document.page(at: 0) else {
+            return nil
+        }
+        return (page, document)
+    }
+
     // MARK: - Hilfslinien
 
     private static func lineHeight(of engine: NotebookTextEngine) -> CGFloat {
