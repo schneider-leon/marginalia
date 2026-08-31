@@ -93,6 +93,30 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertNotNil(reopened.bodyRTF)
     }
 
+    func testSeiteAmEndeOderHinterDerAktuellen() throws {
+        let package = try NotebookPackage.create(title: "Einfuegen", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Einfuegen")
+        session.insertBlankPage()
+        session.insertBlankPage()
+        let original = session.pageDescriptors.map(\.id)
+        XCTAssertEqual(original.count, 3)
+
+        // Hinter der aktuellen Seite
+        session.setCurrentPage(0)
+        session.insertBlankPage(after: session.currentPageIndex)
+        XCTAssertEqual(session.pageDescriptors.count, 4)
+        XCTAssertEqual(session.pageDescriptors[0].id, original[0])
+        XCTAssertFalse(original.contains(session.pageDescriptors[1].id), "Die neue Seite steht an Position 2")
+        XCTAssertEqual(session.pageDescriptors[2].id, original[1])
+
+        // Am Ende
+        let beforeAppend = session.pageDescriptors.map(\.id)
+        session.insertBlankPage()
+        XCTAssertEqual(session.pageDescriptors.count, 5)
+        XCTAssertEqual(Array(session.pageDescriptors.prefix(4)).map(\.id), beforeAppend)
+        XCTAssertEqual(session.pageDescriptors.last?.kind, .blank)
+    }
+
     /// Beide Modi teilen sich die Seitenposition — beim Umschalten darf die
     /// Ansicht nicht wieder vorne anfangen.
     func testSeitenpositionUeberlebtDenModuswechsel() throws {

@@ -186,12 +186,20 @@ struct NotebookEditorView: View {
 
             Divider().frame(height: 18)
 
-            Button {
-                session.insertBlankPage()
+            Menu {
+                Button("Am Ende anhaengen") {
+                    session.insertBlankPage()
+                }
+                Button("Nach Seite \(currentPageIndex + 1) einfuegen") {
+                    session.insertBlankPage(after: currentPageIndex)
+                }
+                .disabled(currentPageIndex + 1 >= session.pageDescriptors.count)
             } label: {
-                Label("Seite anhaengen", systemImage: "plus.rectangle.portrait")
+                Label("Seite einfuegen", systemImage: "plus.rectangle.portrait")
             }
-            .help("Leere Seite am Ende anhaengen")
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Leere Seite einfuegen")
 
             Button {
                 insertImage(onPage: currentPageIndex)
