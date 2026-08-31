@@ -35,7 +35,6 @@ struct RootView: View {
                 onCreateFolder: createFolder(in:),
                 onCreateNotebook: createNotebook(in:),
                 onImportPDF: presentImporter(into:),
-                onToggleSidebar: toggleSidebar,
                 isSidebarVisible: sidebarVisibility != .detailOnly,
                 onRename: rename(id:to:),
                 onDelete: delete(id:)
@@ -166,8 +165,8 @@ struct RootView: View {
         selection = activeID
     }
 
-    /// Bleibt auch erreichbar, wenn die Seitenleiste eingeklappt ist und
-    /// ihre Leistenelemente damit verschwinden — ueber das Menue.
+    /// Fuer den Menuebefehl mit Tastenkuerzel. Den Knopf in der
+    /// Fensterleiste stellt macOS selbst.
     private func toggleSidebar() {
         withAnimation(.easeOut(duration: 0.2)) {
             sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly

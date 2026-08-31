@@ -12,11 +12,8 @@ struct LibrarySidebar: View {
     let onCreateFolder: (UUID?) -> UUID?
     let onCreateNotebook: (UUID?) -> UUID?
     let onImportPDF: (UUID?) -> Void
-    let onToggleSidebar: () -> Void
-
     /// Ob die Bibliothek gerade zu sehen ist. Das „+“ gehoert zu ihr und
-    /// verschwindet mit ihr; der Umschalter bleibt, sonst gaebe es keinen
-    /// Weg zurueck.
+    /// verschwindet mit ihr.
     let isSidebarVisible: Bool
     let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
@@ -51,16 +48,20 @@ struct LibrarySidebar: View {
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
-        // `.primaryAction` landet im Abschnitt der Seitenleiste, `.navigation`
-        // dagegen im Dokumentbereich. Den eingebauten Umschalter ersetzen wir,
-        // weil er sonst immer aussen sitzt und das „+“ nicht davor passt.
-        .toolbar(removing: .sidebarToggle)
+        // Der eingebaute Umschalter bleibt: AppKit setzt ihn rechtsbuendig
+        // in den Abschnitt der Seitenleiste und gibt ihm die Pillenoptik.
+        // Ein eigener Knopf bekommt beides nicht — er landete links neben
+        // den Fensterknoepfen und ohne Hintergrund.
+        //
+        // `.primaryAction` landet im Abschnitt der Seitenleiste (`.navigation`
+        // dagegen im Dokumentbereich); der Abstandshalter schiebt das „+“ von
+        // links an den Umschalter heran.
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if isSidebarVisible {
+                    Spacer()
                     addMenu
                 }
-                sidebarToggle
             }
         }
         .alert("Umbenennen", isPresented: renamingBinding) {
@@ -104,12 +105,6 @@ struct LibrarySidebar: View {
         .help("Ordner, Notizbuch oder PDF hinzufuegen")
     }
 
-    private var sidebarToggle: some View {
-        Button(action: onToggleSidebar) {
-            Label("Bibliothek", systemImage: "sidebar.leading")
-        }
-        .help("Bibliothek ein- oder ausblenden")
-    }
 
     // MARK: - Aktionen
 
