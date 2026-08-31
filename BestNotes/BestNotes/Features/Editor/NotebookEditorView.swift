@@ -24,7 +24,7 @@ struct NotebookEditorView: View {
 
     private let pageGap = DocumentAppearance.pageGap
 
-    var body: some View {
+    private var pageScroller: some View {
         // Beide Achsen: bei 300 Prozent oder Doppelseite passt die Seite
         // sonst nicht mehr ins Fenster und wuerde abgeschnitten.
         ScrollView([.vertical, .horizontal]) {
@@ -48,7 +48,16 @@ struct NotebookEditorView: View {
         .onChange(of: visiblePageID) { _, id in followScrollPosition(id) }
         .task { restoreScrollPosition() }
         .background { viewportWidthReader }
-        .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
+    }
+
+    var body: some View {
+        // Leiste ueber dem Inhalt statt darueber schwebend: sonst scrollt
+        // das weisse Papier unter das Material und die Leiste sieht anders
+        // aus als in der PDF-Ansicht, wo nichts durchscheinen kann.
+        VStack(spacing: 0) {
+            modeToolbar
+            pageScroller
+        }
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)
         .toolbar {
@@ -181,7 +190,7 @@ struct NotebookEditorView: View {
     // Aufbau, nur andere Werkzeuge.
 
     private var modeToolbar: some View {
-        HStack(spacing: 12) {
+        ToolStrip {
             DocumentModePicker(session: session)
 
             Divider().frame(height: 18)
@@ -252,12 +261,6 @@ struct NotebookEditorView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     private var loadWarningsPopover: some View {

@@ -14,15 +14,15 @@ struct DocumentViewerView: View {
     @State private var failure: ViewerFailure?
 
     var body: some View {
-        PDFViewRepresentable(
-            session: session,
-            displayMode: session.displayMode,
-            activeTool: session.activeTool,
-            style: session.style,
-            zoom: session.zoom
-        )
-        .safeAreaInset(edge: .top, spacing: 0) {
+        VStack(spacing: 0) {
             AnnotationToolbar(session: session)
+            PDFViewRepresentable(
+                session: session,
+                displayMode: session.displayMode,
+                activeTool: session.activeTool,
+                style: session.style,
+                zoom: session.zoom
+            )
         }
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)

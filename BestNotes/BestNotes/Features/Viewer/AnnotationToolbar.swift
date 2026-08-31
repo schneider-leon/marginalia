@@ -13,7 +13,7 @@ struct AnnotationToolbar: View {
     @Bindable var session: DocumentSession
 
     var body: some View {
-        HStack(spacing: 12) {
+        ToolStrip {
             DocumentModePicker(session: session)
 
             Divider().frame(height: 18)
