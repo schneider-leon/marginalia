@@ -11,6 +11,8 @@ struct DocumentTabBar: View {
 
     @State private var hoveredID: UUID?
 
+    private static let barHeight: CGFloat = 32
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -21,6 +23,7 @@ struct DocumentTabBar: View {
                     }
                     Spacer(minLength: 0)
                 }
+                .frame(height: Self.barHeight)
             }
             .onChange(of: store.activeID) { _, newValue in
                 guard let newValue else { return }
@@ -29,7 +32,10 @@ struct DocumentTabBar: View {
                 }
             }
         }
-        .frame(height: 32)
+        .frame(height: Self.barHeight)
+        // Ohne das waechst die Hervorhebung des aktiven Tabs nach oben in die
+        // Sicherheitszone hinein und liegt dann hinter der Fensterleiste.
+        .clipped()
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -52,7 +58,8 @@ struct DocumentTabBar: View {
             closeControl(for: tab, revealed: isActive || isHovered)
         }
         .padding(.horizontal, 10)
-        .frame(minWidth: 120, maxWidth: 200, maxHeight: .infinity)
+        .frame(minWidth: 120, maxWidth: 200)
+        .frame(height: Self.barHeight)
         .background(isActive ? AnyShapeStyle(.selection.opacity(0.35)) : AnyShapeStyle(.clear))
         .overlay(alignment: .trailing) {
             Divider()

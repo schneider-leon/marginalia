@@ -104,6 +104,9 @@ struct PageNavigationControls: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
+        // Die Fensterleiste legt ihre Kapsel eng um den Inhalt; ohne das
+        // beruehrt die Gesamtzahl den rechten Rand.
+        .padding(.trailing, 8)
         .fixedSize()
     }
 
