@@ -25,48 +25,42 @@ struct NotebookEditorView: View {
     private let pageGap: CGFloat = 24
 
     var body: some View {
-        ScrollView {
+        // Beide Achsen: bei 300 Prozent oder Doppelseite passt die Seite
+        // sonst nicht mehr ins Fenster und wuerde abgeschnitten.
+        ScrollView([.vertical, .horizontal]) {
             // Bewusst kein LazyVStack: die Textansichten teilen sich einen
             // Layout-Manager, und ein Container darf nur eine Ansicht haben.
             // Beim Wegwerfen und Neuaufbauen beim Scrollen waere das fragil.
             VStack(spacing: pageGap) {
-                ForEach(Array(session.pageDescriptors.enumerated()), id: \.element.id) { index, descriptor in
-                    pageView(index: index, descriptor: descriptor)
+                ForEach(pageRows, id: \.id) { row in
+                    HStack(alignment: .top, spacing: pageGap) {
+                        ForEach(row.indices, id: \.self) { index in
+                            pageView(index: index)
+                        }
+                    }
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: max(session.editorViewportWidth, 0))
             .scrollTargetLayout()
         }
         .contentMargins(.vertical, pageGap, for: .scrollContent)
         .scrollPosition(id: $visiblePageID)
+        .onChange(of: visiblePageID) { _, id in followScrollPosition(id) }
         .background(Color(nsColor: .underPageBackgroundColor))
         .background { viewportWidthReader }
         .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                PageNavigationControls(
-                    currentIndex: currentPageIndex,
-                    pageCount: session.pageDescriptors.count,
-                    goPrevious: { goToPage(currentPageIndex - 1) },
-                    goNext: { goToPage(currentPageIndex + 1) },
-                    goTo: goToPage
-                )
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                ZoomControls(
-                    scale: session.currentScale,
-                    canZoomIn: session.canZoomIn,
-                    canZoomOut: session.canZoomOut,
-                    zoomIn: session.zoomIn,
-                    zoomOut: session.zoomOut,
-                    fit: session.fitToWindow,
-                    fitHelp: "Auf Fensterbreite anpassen"
-                )
-                rulingPicker
-                exportButton
-            }
+            DocumentToolbarContent(
+                session: session,
+                currentIndex: currentPageIndex,
+                pageCount: session.pageDescriptors.count,
+                goPrevious: { goToPage(currentPageIndex - 1) },
+                goNext: { goToPage(currentPageIndex + 1) },
+                goTo: goToPage,
+                export: exportCopy
+            )
         }
         .sessionAlerts(session)
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
@@ -85,24 +79,47 @@ struct NotebookEditorView: View {
         return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
     }
 
+    // MARK: - Seitenaufteilung
+
+    /// Eine Zeile der Seitenansicht. Der Anzeigemodus bestimmt, wie viele
+    /// Seiten nebeneinander stehen — genau wie in der PDF-Ansicht.
+    private struct PageRow: Identifiable {
+        let id: UUID
+        let indices: [Int]
+    }
+
+    private var pageRows: [PageRow] {
+        let descriptors = session.pageDescriptors
+        return PageLayout.rows(
+            pageCount: descriptors.count,
+            mode: session.displayMode,
+            currentIndex: currentPageIndex
+        ).map { PageRow(id: descriptors[$0[0]].id, indices: $0) }
+    }
+
     // MARK: - Seitenlage
 
-    /// Die oberste sichtbare Seite; bevor gescrollt wurde, die zuletzt
-    /// angeklickte.
+    /// Die aktuelle Seite fuehrt die Session. Beim Scrollen wird sie
+    /// nachgezogen, im Einzelseitenmodus ist sie die einzige sichtbare.
     private var currentPageIndex: Int {
-        if let visiblePageID,
-           let index = session.pageDescriptors.firstIndex(where: { $0.id == visiblePageID }) {
-            return index
-        }
-        return min(session.activePageIndex, max(session.pageDescriptors.count - 1, 0))
+        min(max(session.activePageIndex, 0), max(session.pageDescriptors.count - 1, 0))
     }
 
     private func goToPage(_ index: Int) {
         guard session.pageDescriptors.indices.contains(index) else { return }
         session.activePageIndex = index
+        guard session.displayMode != .singlePage else { return }
         withAnimation(.easeOut(duration: 0.2)) {
             visiblePageID = session.pageDescriptors[index].id
         }
+    }
+
+    private func followScrollPosition(_ pageID: UUID?) {
+        guard session.displayMode != .singlePage,
+              let pageID,
+              let index = session.pageDescriptors.firstIndex(where: { $0.id == pageID })
+        else { return }
+        session.activePageIndex = index
     }
 
     private var viewportWidthReader: some View {
@@ -118,7 +135,7 @@ struct NotebookEditorView: View {
     // MARK: - Seiten
 
     @ViewBuilder
-    private func pageView(index: Int, descriptor: PageDescriptor) -> some View {
+    private func pageView(index: Int) -> some View {
         let size = session.document.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
         let zoom = session.editorZoom
         let containerIndex = session.notebook?.writablePageIndices.firstIndex(of: index)
@@ -202,6 +219,11 @@ struct NotebookEditorView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
 
+            Divider().frame(height: 18)
+
+            rulingPicker
+                .fixedSize()
+
             Spacer(minLength: 0)
 
             if !session.loadWarnings.isEmpty {
@@ -252,8 +274,6 @@ struct NotebookEditorView: View {
         .frame(width: 320)
     }
 
-    /// Gegenstueck zum Anzeigemodus-Picker der PDF-Ansicht: gleiche Stelle,
-    /// gleiche Form, nur betrifft es hier die Seitendarstellung.
     private var rulingPicker: some View {
         Picker("Linien", selection: rulingBinding) {
             ForEach(PageRuling.allCases) { ruling in
@@ -271,13 +291,6 @@ struct NotebookEditorView: View {
     }
 
     // MARK: - Aktionen
-
-    private var exportButton: some View {
-        Button(action: exportCopy) {
-            Label("Exportieren", systemImage: "square.and.arrow.up")
-        }
-        .help("Als PDF exportieren — getippter Text wird eingebrannt")
-    }
 
     private func saveInPlace() {
         guard session.hasUnsavedChanges else { return }

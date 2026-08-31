@@ -230,6 +230,18 @@ aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
 | ⌘+ / ⌘- / ⌘0 | Zoom |
 | ⌥⌘↑ / ⌥⌘↓ | Seite zurueck / vor |
 
+### 5a. Eine Fensterleiste fuer beide Modi
+
+`DocumentToolbarContent` ist ein `ToolbarContent` und existiert genau einmal.
+PDF-Ansicht und Schreibmodus reichen nur ihre eigenen Werte hinein — dadurch
+koennen die Leisten nicht auseinanderlaufen. Der Schreibmodus kennt deshalb
+auch dieselben Anzeigemodi (Einzelseite, fortlaufend, Doppelseite); die
+Seitenaufteilung dafuer steckt in `PageLayout` und ist einzeln getestet.
+
+Seitenzahl und Gesamtzahl liegen in *einem* Rahmen. Als zwei nebeneinander
+gestellte Elemente verteilt die Fensterleiste den Platz zwischen ihnen, und
+„von N“ rutscht nach rechts weg.
+
 ### 6. Sichern passiert von selbst
 
 Jede Aenderung stoesst eine Autosicherung an, die drei Sekunden nach der

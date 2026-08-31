@@ -2,7 +2,8 @@
 //  DocumentViewerView.swift
 //  BestNotes
 //
-//  SwiftUI-Chrome um die PDFView: Werkzeuge, Seitennavigation, Zoom, Export.
+//  SwiftUI-Chrome um die PDFView. Die Fensterleiste kommt aus
+//  `DocumentToolbarContent` und ist mit der des Schreibmodus identisch.
 //
 
 import SwiftUI
@@ -25,28 +26,15 @@ struct DocumentViewerView: View {
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                PageNavigationControls(
-                    currentIndex: session.currentPageIndex,
-                    pageCount: session.pageCount,
-                    goPrevious: session.goToPreviousPage,
-                    goNext: session.goToNextPage,
-                    goTo: { session.go(toPageIndex: $0) }
-                )
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                ZoomControls(
-                    scale: session.currentScale,
-                    canZoomIn: session.canZoomIn,
-                    canZoomOut: session.canZoomOut,
-                    zoomIn: session.zoomIn,
-                    zoomOut: session.zoomOut,
-                    fit: session.fitToWindow,
-                    fitHelp: "Auf Fensterbreite anpassen"
-                )
-                displayModePicker
-                exportButton
-            }
+            DocumentToolbarContent(
+                session: session,
+                currentIndex: session.currentPageIndex,
+                pageCount: session.pageCount,
+                goPrevious: session.goToPreviousPage,
+                goNext: session.goToNextPage,
+                goTo: { session.go(toPageIndex: $0) },
+                export: exportCopy
+            )
         }
         .sheet(item: $session.pendingComment) { _ in
             CommentSheet(
@@ -72,27 +60,7 @@ struct DocumentViewerView: View {
         return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
     }
 
-    // MARK: - Anzeigemodus
-
-    private var displayModePicker: some View {
-        Picker("Anzeige", selection: $session.displayMode) {
-            ForEach(PageDisplayMode.allCases) { mode in
-                Label(mode.label, systemImage: mode.symbol).tag(mode)
-            }
-        }
-        .pickerStyle(.menu)
-    }
-
     // MARK: - Export
-
-    private var exportButton: some View {
-        Button {
-            exportCopy()
-        } label: {
-            Label("Exportieren", systemImage: "square.and.arrow.up")
-        }
-        .help("Annotierte PDF an einen anderen Ort schreiben")
-    }
 
     private func exportCopy() {
         do {

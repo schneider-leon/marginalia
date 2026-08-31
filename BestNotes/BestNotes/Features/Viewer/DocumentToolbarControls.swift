@@ -2,12 +2,59 @@
 //  DocumentToolbarControls.swift
 //  BestNotes
 //
-//  Die Bedienelemente der Fensterleiste. Beide Modi — PDF-Ansicht und
-//  Schreibmodus — benutzen dieselben Bausteine, damit die Leiste beim
-//  Umschalten nicht die Form wechselt.
+//  Die Fensterleiste — einmal definiert, von beiden Modi benutzt.
+//
+//  `DocumentToolbarContent` ist bewusst `ToolbarContent` und keine Sammlung
+//  einzelner Views: so kann die Leiste zwischen PDF-Ansicht und Schreibmodus
+//  nicht auseinanderlaufen, weil es sie nur einmal gibt.
 //
 
 import SwiftUI
+
+struct DocumentToolbarContent: ToolbarContent {
+    @Bindable var session: DocumentSession
+
+    let currentIndex: Int
+    let pageCount: Int
+    let goPrevious: () -> Void
+    let goNext: () -> Void
+    let goTo: (Int) -> Void
+    let export: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            PageNavigationControls(
+                currentIndex: currentIndex,
+                pageCount: pageCount,
+                goPrevious: goPrevious,
+                goNext: goNext,
+                goTo: goTo
+            )
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            ZoomControls(
+                scale: session.currentScale,
+                canZoomIn: session.canZoomIn,
+                canZoomOut: session.canZoomOut,
+                zoomIn: session.zoomIn,
+                zoomOut: session.zoomOut,
+                fit: session.fitToWindow
+            )
+
+            Picker("Anzeige", selection: $session.displayMode) {
+                ForEach(PageDisplayMode.allCases) { mode in
+                    Label(mode.label, systemImage: mode.symbol).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Button(action: export) {
+                Label("Exportieren", systemImage: "square.and.arrow.up")
+            }
+            .help("Als PDF exportieren")
+        }
+    }
+}
 
 struct PageNavigationControls: View {
     let currentIndex: Int
@@ -30,25 +77,46 @@ struct PageNavigationControls: View {
             }
             .disabled(currentIndex + 1 >= pageCount)
 
-            TextField("Seite", text: $fieldText)
-                .textFieldStyle(.roundedBorder)
-                // Zentriert statt rechtsbuendig: sonst klebt die Zahl am Rand.
-                .multilineTextAlignment(.center)
+            pageField
+        }
+        .fixedSize()
+        .onAppear(perform: sync)
+        .onChange(of: currentIndex) { sync() }
+        .onChange(of: pageCount) { sync() }
+    }
+
+    /// Zahl und Gesamtzahl stecken in *einem* Feld.
+    ///
+    /// Als zwei nebeneinandergestellte Elemente verteilt die Fensterleiste den
+    /// Platz zwischen ihnen, und „von N“ rutscht nach rechts weg. Innerhalb
+    /// eines Rahmens kann das nicht passieren.
+    private var pageField: some View {
+        HStack(spacing: 4) {
+            TextField("", text: $fieldText)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
                 .monospacedDigit()
-                .frame(width: 46)
+                .frame(width: digitWidth)
                 .onSubmit(commit)
 
             Text("von \(pageCount)")
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .fixedSize()
         }
-        // Ohne das zieht die Fensterleiste die Gruppe auseinander und „von N“
-        // rutscht vom Eingabefeld weg an den rechten Rand.
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(.quinary)
+                .stroke(.separator, lineWidth: 1)
+        }
         .fixedSize()
-        .onAppear(perform: sync)
-        .onChange(of: currentIndex) { sync() }
-        .onChange(of: pageCount) { sync() }
+    }
+
+    /// Breite nach der groessten vorkommenden Seitenzahl, damit das Feld beim
+    /// Blaettern nicht springt.
+    private var digitWidth: CGFloat {
+        CGFloat(max(2, String(max(pageCount, 1)).count)) * 9
     }
 
     private func sync() {
@@ -71,7 +139,6 @@ struct ZoomControls: View {
     let zoomIn: () -> Void
     let zoomOut: () -> Void
     let fit: () -> Void
-    let fitHelp: String
 
     var body: some View {
         HStack(spacing: 4) {
@@ -85,12 +152,13 @@ struct ZoomControls: View {
                     .monospacedDigit()
                     .frame(minWidth: 44)
             }
-            .help(fitHelp)
+            .help("Auf Fensterbreite anpassen")
 
             Button(action: zoomIn) {
                 Label("Vergroessern", systemImage: "plus.magnifyingglass")
             }
             .disabled(!canZoomIn)
         }
+        .fixedSize()
     }
 }
