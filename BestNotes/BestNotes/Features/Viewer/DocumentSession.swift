@@ -22,9 +22,6 @@ protocol PDFViewCommandTarget: AnyObject {
     func go(toPageIndex index: Int)
     func goToNextPage()
     func goToPreviousPage()
-    func zoomIn()
-    func zoomOut()
-    func fitToWindow()
     func refreshDisplay()
 }
 
@@ -130,9 +127,6 @@ final class DocumentSession: Identifiable {
 
     /// Aus der `PDFView` zurueckgespiegelt — nur der Coordinator schreibt hier.
     private(set) var currentPageIndex = 0
-    private(set) var scaleFactor: CGFloat = 1
-    private(set) var minScaleFactor: CGFloat = 0.25
-    private(set) var maxScaleFactor: CGFloat = 5
 
     private(set) var hasUnsavedChanges = false
     var pendingComment: PendingComment?
@@ -173,15 +167,15 @@ final class DocumentSession: Identifiable {
     /// Bilder ohne weitere Angabe.
     var activePageIndex = 0
 
-    /// Vergroesserung im Schreibmodus. Die PDF-Ansicht hat ihren eigenen
-    /// Zoom in der `PDFView`; im Editor skalieren wir die Seitenansichten
-    /// selbst.
-    private(set) var editorZoom: CGFloat = 1
+    /// *Ein* Zoomwert fuer beide Modi. Vorher hatte die PDF-Ansicht einen
+    /// eigenen und rechnete sich beim Oeffnen selbst einen aus — dadurch
+    /// sprang die Groesse beim Umschalten.
+    private(set) var zoom: CGFloat = 1
 
-    /// Sichtbare Breite des Editors — fuer „auf Fensterbreite anpassen“.
-    var editorViewportWidth: CGFloat = 0
+    /// Sichtbare Breite des Dokumentbereichs — fuer „auf Fensterbreite anpassen“.
+    var viewportWidth: CGFloat = 0
 
-    private static let editorZoomSteps: [CGFloat] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
+    private static let zoomSteps: [CGFloat] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 
     /// Zaehler, damit SwiftUI Bildaenderungen sieht; das Paket ist nicht
     /// observierbar.
@@ -476,49 +470,35 @@ final class DocumentSession: Identifiable {
     func goToNextPage() { commandTarget?.goToNextPage() }
     func goToPreviousPage() { commandTarget?.goToPreviousPage() }
 
-    // MARK: Zoom — je nach Modus die PDFView oder der Editor
+    // MARK: Zoom
 
-    /// Ob gerade getippt wird. Entscheidet, wohin Zoombefehle gehen.
+    /// Ob gerade getippt wird — entscheidet nur noch ueber die Werkzeuge,
+    /// nicht mehr ueber Zoom oder Aussehen.
     var isTextEditing: Bool { notebookMode == .write }
 
-    var currentScale: CGFloat { isTextEditing ? editorZoom : scaleFactor }
-
-    var canZoomIn: Bool {
-        isTextEditing
-            ? editorZoom < (Self.editorZoomSteps.last ?? 1) - 0.001
-            : scaleFactor < maxScaleFactor
-    }
-
-    var canZoomOut: Bool {
-        isTextEditing
-            ? editorZoom > (Self.editorZoomSteps.first ?? 1) + 0.001
-            : scaleFactor > minScaleFactor
-    }
+    var currentScale: CGFloat { zoom }
+    var canZoomIn: Bool { zoom < (Self.zoomSteps.last ?? 1) - 0.001 }
+    var canZoomOut: Bool { zoom > (Self.zoomSteps.first ?? 1) + 0.001 }
 
     func zoomIn() {
-        guard isTextEditing else { return commandTarget?.zoomIn() ?? () }
-        if let next = Self.editorZoomSteps.first(where: { $0 > editorZoom + 0.001 }) {
-            editorZoom = next
-        }
+        if let next = Self.zoomSteps.first(where: { $0 > zoom + 0.001 }) { setZoom(next) }
     }
 
     func zoomOut() {
-        guard isTextEditing else { return commandTarget?.zoomOut() ?? () }
-        if let previous = Self.editorZoomSteps.last(where: { $0 < editorZoom - 0.001 }) {
-            editorZoom = previous
-        }
+        if let previous = Self.zoomSteps.last(where: { $0 < zoom - 0.001 }) { setZoom(previous) }
     }
 
     func fitToWindow() {
-        guard isTextEditing else { return commandTarget?.fitToWindow() ?? () }
-        let pageWidth = document.page(at: 0)?.bounds(for: .cropBox).width ?? PDFPageFactory.a4.width
-        guard editorViewportWidth > 0, pageWidth > 0 else {
-            editorZoom = 1
-            return
-        }
-        // Etwas Luft lassen, damit der Seitenschatten nicht am Rand klebt.
-        let fitted = (editorViewportWidth - 64) / pageWidth
-        editorZoom = min(max(fitted, Self.editorZoomSteps.first ?? 0.5), Self.editorZoomSteps.last ?? 3)
+        let pageWidth = document.page(at: currentPageIndex)?.bounds(for: .cropBox).width
+            ?? PDFPageFactory.a4.width
+        guard viewportWidth > 0, pageWidth > 0 else { return setZoom(1) }
+        setZoom((viewportWidth - DocumentAppearance.pageGap * 2) / pageWidth)
+    }
+
+    func setZoom(_ value: CGFloat) {
+        let clamped = min(max(value, Self.zoomSteps.first ?? 0.25), Self.zoomSteps.last ?? 4)
+        guard abs(clamped - zoom) > 0.0001 else { return }
+        zoom = clamped
     }
 
     // MARK: Rueckmeldungen (PDFView -> SwiftUI)
@@ -528,10 +508,10 @@ final class DocumentSession: Identifiable {
         currentPageIndex = index
     }
 
-    func reportScale(_ scale: CGFloat, min: CGFloat, max: CGFloat) {
-        if scaleFactor != scale { scaleFactor = scale }
-        if minScaleFactor != min { minScaleFactor = min }
-        if maxScaleFactor != max { maxScaleFactor = max }
+    /// Die `PDFView` kann auch selbst zoomen (Trackpad). Der Wert landet im
+    /// gemeinsamen Zoom, damit der Editor ihn uebernimmt.
+    func reportScale(_ scale: CGFloat) {
+        setZoom(scale)
     }
 
     // MARK: Annotationen

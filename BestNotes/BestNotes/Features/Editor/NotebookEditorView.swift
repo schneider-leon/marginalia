@@ -22,7 +22,7 @@ struct NotebookEditorView: View {
     @State private var showsLoadWarnings = false
     @State private var visiblePageID: UUID?
 
-    private let pageGap: CGFloat = 24
+    private let pageGap = DocumentAppearance.pageGap
 
     var body: some View {
         // Beide Achsen: bei 300 Prozent oder Doppelseite passt die Seite
@@ -40,13 +40,12 @@ struct NotebookEditorView: View {
                     }
                 }
             }
-            .frame(minWidth: max(session.editorViewportWidth, 0))
+            .frame(minWidth: max(session.viewportWidth, 0))
             .scrollTargetLayout()
         }
         .contentMargins(.vertical, pageGap, for: .scrollContent)
         .scrollPosition(id: $visiblePageID)
         .onChange(of: visiblePageID) { _, id in followScrollPosition(id) }
-        .background(Color.documentBackground.ignoresSafeArea())
         .background { viewportWidthReader }
         .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
@@ -125,9 +124,9 @@ struct NotebookEditorView: View {
     private var viewportWidthReader: some View {
         GeometryReader { proxy in
             Color.clear
-                .onAppear { session.editorViewportWidth = proxy.size.width }
+                .onAppear { session.viewportWidth = proxy.size.width }
                 .onChange(of: proxy.size.width) { _, width in
-                    session.editorViewportWidth = width
+                    session.viewportWidth = width
                 }
         }
     }
@@ -137,7 +136,7 @@ struct NotebookEditorView: View {
     @ViewBuilder
     private func pageView(index: Int) -> some View {
         let size = session.document.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
-        let zoom = session.editorZoom
+        let zoom = session.zoom
         let containerIndex = session.notebook.writablePageIndices.firstIndex(of: index)
 
         NotebookPageView(

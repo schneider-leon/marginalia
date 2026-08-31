@@ -12,16 +12,26 @@ import SwiftUI
 struct WindowConfigurator: NSViewRepresentable {
     let configure: (NSWindow) -> Void
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        // Beim Erzeugen haengt die View noch an keinem Fenster.
-        DispatchQueue.main.async {
-            if let window = view.window { configure(window) }
+    /// Wendet die Einstellung an, sobald die View tatsaechlich in einem
+    /// Fenster haengt. Ein einmaliger Versuch beim Erzeugen greift nicht —
+    /// da gibt es das Fenster noch nicht.
+    final class ProbeView: NSView {
+        var configure: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { configure?(window) }
         }
+    }
+
+    func makeNSView(context: Context) -> ProbeView {
+        let view = ProbeView(frame: .zero)
+        view.configure = configure
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    func updateNSView(_ nsView: ProbeView, context: Context) {
+        nsView.configure = configure
         if let window = nsView.window { configure(window) }
     }
 }

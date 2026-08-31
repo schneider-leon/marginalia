@@ -29,41 +29,61 @@ final class EditorScalingTests: TemporaryDirectoryTestCase {
         let package = try NotebookPackage.create(title: "Zoom", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Zoom")
 
-        XCTAssertTrue(session.isTextEditing)
         XCTAssertEqual(session.currentScale, 1)
         XCTAssertTrue(session.canZoomIn)
         XCTAssertTrue(session.canZoomOut)
 
         session.zoomIn()
-        XCTAssertEqual(session.editorZoom, 1.25)
+        XCTAssertEqual(session.zoom, 1.25)
         session.zoomOut()
         session.zoomOut()
-        XCTAssertEqual(session.editorZoom, 0.75)
+        XCTAssertEqual(session.zoom, 0.75)
 
-        // Bis an den Anschlag und nicht darueber hinaus
         for _ in 0..<10 { session.zoomOut() }
-        XCTAssertEqual(session.editorZoom, 0.5)
+        XCTAssertEqual(session.zoom, 0.25)
         XCTAssertFalse(session.canZoomOut)
         for _ in 0..<20 { session.zoomIn() }
-        XCTAssertEqual(session.editorZoom, 3)
+        XCTAssertEqual(session.zoom, 4)
         XCTAssertFalse(session.canZoomIn)
 
-        session.editorViewportWidth = 595 + 64
+        session.viewportWidth = 595 + DocumentAppearance.pageGap * 2
         session.fitToWindow()
-        XCTAssertEqual(session.editorZoom, 1, accuracy: 0.001)
+        XCTAssertEqual(session.zoom, 1, accuracy: 0.001)
     }
 
-    func testZoomBefehleGehenImAnnotationsmodusAnDiePDFView() throws {
+    /// Beide Modi teilen sich einen Zoomwert — beim Umschalten darf die
+    /// Seite nicht springen.
+    func testZoomUeberlebtDenModuswechsel() throws {
         let package = try NotebookPackage.create(title: "Modus", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Modus")
 
-        session.notebookMode = .annotate
-        XCTAssertFalse(session.isTextEditing)
-
-        let before = session.editorZoom
         session.zoomIn()
-        XCTAssertEqual(session.editorZoom, before, "Im Annotationsmodus darf der Editorzoom sich nicht aendern")
-        XCTAssertEqual(session.currentScale, session.scaleFactor)
+        session.zoomIn()
+        let chosen = session.zoom
+        XCTAssertEqual(chosen, 1.5)
+
+        session.notebookMode = .annotate
+        XCTAssertEqual(session.zoom, chosen)
+        XCTAssertEqual(session.currentScale, chosen)
+
+        session.zoomOut()
+        XCTAssertEqual(session.zoom, 1.25)
+
+        session.notebookMode = .write
+        XCTAssertEqual(session.zoom, 1.25, "Der Zoom gehoert dem Dokument, nicht dem Modus")
+    }
+
+    /// Die PDFView kann selbst zoomen (Trackpad); der Wert muss im
+    /// gemeinsamen Zoom landen.
+    func testZoomAusDerPDFViewWirdUebernommen() throws {
+        let package = try NotebookPackage.create(title: "Trackpad", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Trackpad")
+
+        session.reportScale(2.0)
+        XCTAssertEqual(session.zoom, 2.0)
+
+        session.reportScale(99)
+        XCTAssertEqual(session.zoom, 4, "Ausserhalb der Stufen wird geklemmt")
     }
 
     func testSeiteZeichnetInhaltAuchVergroessert() throws {

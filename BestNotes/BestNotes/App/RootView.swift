@@ -114,12 +114,17 @@ struct RootView: View {
     @ViewBuilder
     private func content(for tab: DocumentTab) -> some View {
         if let session = tab.session {
-            if session.notebookMode == .write {
-                NotebookEditorView(session: session)
-                    .focusedSceneValue(\.documentSession, session)
-            } else {
-                DocumentViewerView(session: session)
+            // Der Hintergrund gehoert hierher, nicht in die beiden Modi:
+            // so kann er beim Umschalten nicht wechseln.
+            Group {
+                if session.notebookMode == .write {
+                    NotebookEditorView(session: session)
+                        .focusedSceneValue(\.documentSession, session)
+                } else {
+                    DocumentViewerView(session: session)
+                }
             }
+            .background(Color.documentBackground)
         } else {
             ContentUnavailableView {
                 Label(tab.title, systemImage: tab.symbol)

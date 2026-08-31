@@ -18,7 +18,8 @@ struct DocumentViewerView: View {
             session: session,
             displayMode: session.displayMode,
             activeTool: session.activeTool,
-            style: session.style
+            style: session.style,
+            zoom: session.zoom
         )
         .safeAreaInset(edge: .top, spacing: 0) {
             AnnotationToolbar(session: session)

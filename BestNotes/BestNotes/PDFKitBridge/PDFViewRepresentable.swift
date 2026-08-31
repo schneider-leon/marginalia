@@ -23,6 +23,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
     let displayMode: PageDisplayMode
     let activeTool: AnnotationTool
     let style: AnnotationStyle
+    let zoom: CGFloat
 
     func makeNSView(context: Context) -> AnnotatingPDFView {
         let view = AnnotatingPDFView()
@@ -34,8 +35,18 @@ struct PDFViewRepresentable: NSViewRepresentable {
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
         view.pageShadowsEnabled = true
+        // Dieselbe Farbe wie hinter dem Editor; der Seitenabstand ebenso.
         view.backgroundColor = .documentBackground
-        view.autoScales = true
+        view.pageBreakMargins = NSEdgeInsets(
+            top: DocumentAppearance.pageGap,
+            left: DocumentAppearance.pageGap,
+            bottom: DocumentAppearance.pageGap,
+            right: DocumentAppearance.pageGap
+        )
+        // Kein autoScales: sonst rechnet die PDFView beim Oeffnen einen
+        // eigenen Zoom aus und der Wert springt beim Moduswechsel.
+        view.autoScales = false
+        view.scaleFactor = zoom
         context.coordinator.attach(to: view)
         return view
     }
@@ -43,7 +54,9 @@ struct PDFViewRepresentable: NSViewRepresentable {
     func updateNSView(_ nsView: AnnotatingPDFView, context: Context) {
         if nsView.document !== session.document {
             nsView.document = session.document
-            nsView.autoScales = true
+        }
+        if abs(nsView.scaleFactor - zoom) > 0.001 {
+            nsView.scaleFactor = zoom
         }
         if nsView.displayMode != displayMode.pdfDisplayMode {
             nsView.displayMode = displayMode.pdfDisplayMode
@@ -121,11 +134,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
                 let index = document.index(for: page)
                 if index != NSNotFound { session.reportPageIndex(index) }
             }
-            session.reportScale(
-                pdfView.scaleFactor,
-                min: pdfView.minScaleFactor,
-                max: pdfView.maxScaleFactor
-            )
+            session.reportScale(pdfView.scaleFactor)
         }
 
         // MARK: Session -> PDFView
@@ -143,26 +152,6 @@ struct PDFViewRepresentable: NSViewRepresentable {
         func goToPreviousPage() {
             guard let pdfView, pdfView.canGoToPreviousPage else { return }
             pdfView.goToPreviousPage(nil)
-        }
-
-        func zoomIn() {
-            guard let pdfView, pdfView.canZoomIn else { return }
-            pdfView.autoScales = false
-            pdfView.zoomIn(nil)
-            syncStateToSession()
-        }
-
-        func zoomOut() {
-            guard let pdfView, pdfView.canZoomOut else { return }
-            pdfView.autoScales = false
-            pdfView.zoomOut(nil)
-            syncStateToSession()
-        }
-
-        func fitToWindow() {
-            guard let pdfView else { return }
-            pdfView.autoScales = true
-            syncStateToSession()
         }
 
         /// Nach Undo/Redo hat sich der Annotationsbestand geaendert, ohne dass
