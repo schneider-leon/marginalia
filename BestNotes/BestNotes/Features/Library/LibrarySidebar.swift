@@ -12,6 +12,7 @@ struct LibrarySidebar: View {
     let onCreateFolder: (UUID?) -> UUID?
     let onCreateNotebook: (UUID?) -> UUID?
     let onImportPDF: (UUID?) -> Void
+    let onToggleSidebar: () -> Void
     let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
 
@@ -45,11 +46,14 @@ struct LibrarySidebar: View {
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
+        // `.primaryAction` landet im Abschnitt der Seitenleiste, `.navigation`
+        // dagegen im Dokumentbereich. Den eingebauten Umschalter ersetzen wir,
+        // weil er sonst immer aussen sitzt und das „+“ nicht davor passt.
+        .toolbar(removing: .sidebarToggle)
         .toolbar {
-            // Sitzt dadurch direkt neben dem Umschalter fuer die Bibliothek,
-            // statt eine eigene Leiste am unteren Rand zu brauchen.
-            ToolbarItem(placement: .navigation) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 addMenu
+                sidebarToggle
             }
         }
         .alert("Umbenennen", isPresented: renamingBinding) {
@@ -91,6 +95,13 @@ struct LibrarySidebar: View {
             Label("Hinzufuegen", systemImage: "plus")
         }
         .help("Ordner, Notizbuch oder PDF hinzufuegen")
+    }
+
+    private var sidebarToggle: some View {
+        Button(action: onToggleSidebar) {
+            Label("Bibliothek", systemImage: "sidebar.leading")
+        }
+        .help("Bibliothek ein- oder ausblenden")
     }
 
     // MARK: - Aktionen

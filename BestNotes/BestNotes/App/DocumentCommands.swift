@@ -15,6 +15,7 @@ struct DocumentCommands: Commands {
     @FocusedValue(\.documentSession) private var session
     @FocusedValue(\.closeTabAction) private var closeTab
     @FocusedValue(\.tabsStore) private var tabs
+    @FocusedValue(\.toggleSidebarAction) private var toggleSidebar
 
     var body: some Commands {
         // „Neu“ ergibt erst mit dem Notizbuchformat (Schritt 6) Sinn.
@@ -78,6 +79,12 @@ struct DocumentCommands: Commands {
                         .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
             }
+        }
+
+        CommandGroup(after: .sidebar) {
+            Button("Bibliothek ein-/ausblenden") { toggleSidebar?() }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+                .disabled(toggleSidebar == nil)
         }
 
         CommandGroup(after: .toolbar) {

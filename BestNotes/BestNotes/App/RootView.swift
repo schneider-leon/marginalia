@@ -35,6 +35,7 @@ struct RootView: View {
                 onCreateFolder: createFolder(in:),
                 onCreateNotebook: createNotebook(in:),
                 onImportPDF: presentImporter(into:),
+                onToggleSidebar: toggleSidebar,
                 onRename: rename(id:to:),
                 onDelete: delete(id:)
             )
@@ -55,6 +56,7 @@ struct RootView: View {
             onCompletion: handleImport
         )
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
+        .focusedSceneValue(\.toggleSidebarAction, toggleSidebar)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
         // macOS zieht den Trennstrich unter der Titelleiste nach dem
@@ -161,6 +163,14 @@ struct RootView: View {
         }
         guard selection != activeID else { return }
         selection = activeID
+    }
+
+    /// Bleibt auch erreichbar, wenn die Seitenleiste eingeklappt ist und
+    /// ihre Leistenelemente damit verschwinden — ueber das Menue.
+    private func toggleSidebar() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
+        }
     }
 
     // MARK: - Import
