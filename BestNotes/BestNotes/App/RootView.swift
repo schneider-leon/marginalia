@@ -41,12 +41,11 @@ struct RootView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             detail
+                // Immer sichtbar, auch auf der Startseite: sonst waere der
+                // Haus-Tab ein Einwegschalter, der mit seinem eigenen Klick
+                // verschwindet.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    // Nur bei geoeffnetem Dokument: auf der Startseite gibt
-                    // es nichts umzuschalten.
-                    if tabs.activeTab != nil {
-                        DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
-                    }
+                    DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
                 }
         }
         .fileImporter(
