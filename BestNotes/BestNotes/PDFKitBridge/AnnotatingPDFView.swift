@@ -68,6 +68,7 @@ final class AnnotatingPDFView: PDFView {
     func prepareNoteEditor() {
         noteEditor.onFinish = { [weak self] annotation, page, oldText, isEmpty in
             guard let self else { return }
+            // Nur ein von Anfang bis Ende leerer Zettel verschwindet wieder.
             if isEmpty {
                 self.editingDelegate?.annotationView(self, didErase: annotation, on: page)
             } else if annotation.contents != oldText {

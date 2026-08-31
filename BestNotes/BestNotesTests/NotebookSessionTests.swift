@@ -186,6 +186,38 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(reopened.textEngine.textStorage.string, "Gespeichert im Annotationsmodus.")
     }
 
+    /// „Die Zettel werden nicht gespeichert“ — das darf nicht passieren,
+    /// auch nicht ueber einen Moduswechsel hinweg.
+    func testZettelUeberlebtModuswechselUndSichern() throws {
+        let package = try NotebookPackage.create(title: "Zettel", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Zettel")
+        session.notebookMode = .annotate
+
+        let page = try XCTUnwrap(package.pdf.page(at: 0))
+        let note = PDFAnnotation(
+            bounds: CGRect(x: 60, y: 600, width: 180, height: 90),
+            forType: .freeText, withProperties: nil
+        )
+        note.contents = "Nicht verlieren"
+        note.color = NSColor(calibratedRed: 1, green: 0.9, blue: 0.55, alpha: 1)
+        note.fontColor = .black
+        note.font = .systemFont(ofSize: 13)
+        session.addAnnotations([note], on: page, actionName: "Zettel")
+
+        // Hin und her schalten tauscht die Seiten aus
+        session.notebookMode = .write
+        session.notebookMode = .annotate
+        XCTAssertEqual(package.pdf.page(at: 0)?.annotations.count, 1)
+
+        try session.save()
+
+        let reopened = try NotebookPackage.read(from: package.url)
+        let restored = try XCTUnwrap(reopened.pdf.page(at: 0)?.annotations.first)
+        XCTAssertEqual(restored.type, "FreeText")
+        XCTAssertEqual(restored.contents, "Nicht verlieren")
+        XCTAssertEqual(restored.bounds.origin.x, 60, accuracy: 0.5)
+    }
+
     func testZettelBewegenUndBeschriftenLassenSichWiderrufen() throws {
         let package = try NotebookPackage.create(title: "Zettel", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Zettel")

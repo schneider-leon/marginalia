@@ -57,15 +57,25 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
         field.wantsLayer = true
         field.layer?.cornerRadius = 3
 
-        // Waehrend der Bearbeitung zeigt das Eingabefeld den Inhalt; die
-        // Annotation darunter waere sonst doppelt zu sehen.
-        annotation.shouldDisplay = false
-
         documentView.addSubview(field)
         textView = field
         reposition()
 
-        pdfView.window?.makeFirstResponder(field)
+        // Bekommen wir die Eingabe nicht, uebernehmen wir auch nicht: sonst
+        // stuende ein leeres Feld ueber der Annotation und wuerde sie beim
+        // Beenden mit seinem leeren Inhalt ueberschreiben.
+        guard pdfView.window?.makeFirstResponder(field) == true else {
+            field.removeFromSuperview()
+            textView = nil
+            self.annotation = nil
+            self.page = nil
+            self.originalText = nil
+            return
+        }
+
+        // Erst jetzt verdecken: das Feld zeigt den Inhalt, die Annotation
+        // darunter waere sonst doppelt zu sehen.
+        annotation.shouldDisplay = false
 
         scrollObserver = NotificationCenter.default.addObserver(
             forName: .PDFViewScaleChanged,
@@ -105,8 +115,18 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
     func finish() -> Bool {
         guard let textView, let annotation, let page else { return false }
 
-        let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        annotation.contents = text
+        let typed = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = (annotation.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Nur schreiben, wenn wirklich etwas getippt wurde. Vorhandenen Text
+        // mit einem leeren Feld zu ueberschreiben waere Datenverlust — und
+        // genau das hat Zettel verschwinden lassen.
+        if !typed.isEmpty {
+            annotation.contents = typed
+            resizeToFitText(annotation, on: page)
+        }
+        let isEmpty = typed.isEmpty && existing.isEmpty
+
         annotation.shouldDisplay = true
 
         textView.removeFromSuperview()
@@ -122,7 +142,33 @@ final class StickyNoteEditor: NSObject, NSTextViewDelegate {
         self.page = nil
         self.originalText = nil
 
-        onFinish?(annotation, page, oldText, text.isEmpty)
+        onFinish?(annotation, page, oldText, isEmpty)
         return true
+    }
+
+    /// Zettel an den Text anpassen — die Groesse soll dem Inhalt folgen.
+    private func resizeToFitText(_ annotation: PDFAnnotation, on page: PDFPage) {
+        guard let text = annotation.contents, !text.isEmpty else { return }
+        let font = annotation.font ?? .systemFont(ofSize: 13)
+        let padding: CGFloat = 10
+        let maxWidth = max(annotation.bounds.width, 180)
+
+        let measured = (text as NSString).boundingRect(
+            with: CGSize(width: maxWidth - padding, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+
+        let size = CGSize(
+            width: min(maxWidth, ceil(measured.width) + padding * 2),
+            height: ceil(measured.height) + padding
+        )
+        let pageBounds = page.bounds(for: .cropBox)
+        // Oben links bleibt stehen, der Zettel waechst nach unten.
+        let top = annotation.bounds.maxY
+        var frame = CGRect(x: annotation.bounds.minX, y: top - size.height, width: size.width, height: size.height)
+        frame.origin.x = min(max(frame.minX, pageBounds.minX), pageBounds.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, pageBounds.minY), pageBounds.maxY - frame.height)
+        annotation.bounds = frame
     }
 }
