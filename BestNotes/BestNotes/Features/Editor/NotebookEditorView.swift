@@ -25,9 +25,7 @@ struct NotebookEditorView: View {
     private let pageGap = DocumentAppearance.pageGap
 
     var body: some View {
-        // Beide Achsen: bei 300 Prozent oder Doppelseite passt die Seite
-        // sonst nicht mehr ins Fenster und wuerde abgeschnitten.
-        ScrollView([.vertical, .horizontal]) {
+        ScrollView(needsHorizontalScrolling ? [.vertical, .horizontal] : .vertical) {
             // Bewusst kein LazyVStack: die Textansichten teilen sich einen
             // Layout-Manager, und ein Container darf nur eine Ansicht haben.
             // Beim Wegwerfen und Neuaufbauen beim Scrollen waere das fragil.
@@ -40,7 +38,9 @@ struct NotebookEditorView: View {
                     }
                 }
             }
-            .frame(minWidth: max(session.viewportWidth, 0))
+            // Ohne waagerechtes Scrollen die Breite fuellen, damit die
+            // Seiten mittig stehen; sonst nur so breit wie noetig.
+            .frame(maxWidth: needsHorizontalScrolling ? nil : .infinity)
             .scrollTargetLayout()
         }
         .contentMargins(.vertical, pageGap, for: .scrollContent)
@@ -73,6 +73,23 @@ struct NotebookEditorView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    // MARK: - Scrollbereich
+
+    /// Breite, die die Seiten nebeneinander brauchen.
+    private var contentWidth: CGFloat {
+        let pageWidth = session.document.page(at: 0)?.bounds(for: .cropBox).width
+            ?? PDFPageFactory.a4.width
+        let columns: CGFloat = session.displayMode == .twoUpContinuous ? 2 : 1
+        return pageWidth * session.zoom * columns + pageGap * (columns - 1)
+    }
+
+    /// Die waagerechte Achse nur einschalten, wenn es etwas zu scrollen gibt.
+    /// Sonst zeigt macOS bei fest eingeblendeten Scrollleisten dauerhaft eine
+    /// Leiste, die nichts tut — die PDF-Ansicht hat keine.
+    private var needsHorizontalScrolling: Bool {
+        session.viewportWidth > 0 && contentWidth > session.viewportWidth
     }
 
     // MARK: - Seitenaufteilung
