@@ -10,7 +10,6 @@ import SwiftUI
 struct DocumentViewerView: View {
     @Bindable var session: DocumentSession
 
-    @State private var pageFieldText = "1"
     @State private var failure: ViewerFailure?
 
     var body: some View {
@@ -27,10 +26,24 @@ struct DocumentViewerView: View {
         .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                pageNavigation
+                PageNavigationControls(
+                    currentIndex: session.currentPageIndex,
+                    pageCount: session.pageCount,
+                    goPrevious: session.goToPreviousPage,
+                    goNext: session.goToNextPage,
+                    goTo: { session.go(toPageIndex: $0) }
+                )
             }
             ToolbarItemGroup(placement: .primaryAction) {
-                zoomControls
+                ZoomControls(
+                    scale: session.currentScale,
+                    canZoomIn: session.canZoomIn,
+                    canZoomOut: session.canZoomOut,
+                    zoomIn: session.zoomIn,
+                    zoomOut: session.zoomOut,
+                    fit: session.fitToWindow,
+                    fitHelp: "Auf Fensterbreite anpassen"
+                )
                 displayModePicker
                 exportButton
             }
@@ -52,86 +65,11 @@ struct DocumentViewerView: View {
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
         .sessionAlerts(session)
-        .onAppear { syncPageField() }
-        .onChange(of: session.currentPageIndex) { syncPageField() }
     }
 
     private var subtitle: String {
         let pages = "\(session.pageCount) Seiten"
         return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
-    }
-
-    // MARK: - Seitennavigation
-
-    private var pageNavigation: some View {
-        HStack(spacing: 4) {
-            Button {
-                session.goToPreviousPage()
-            } label: {
-                Label("Vorherige Seite", systemImage: "chevron.up")
-            }
-            .disabled(!session.canGoToPreviousPage)
-
-            Button {
-                session.goToNextPage()
-            } label: {
-                Label("Naechste Seite", systemImage: "chevron.down")
-            }
-            .disabled(!session.canGoToNextPage)
-
-            TextField("Seite", text: $pageFieldText)
-                .textFieldStyle(.roundedBorder)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 44)
-                .onSubmit(jumpToTypedPage)
-
-            Text("von \(session.pageCount)")
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-    }
-
-    private func syncPageField() {
-        pageFieldText = String(session.currentPageIndex + 1)
-    }
-
-    private func jumpToTypedPage() {
-        if let number = Int(pageFieldText.trimmingCharacters(in: .whitespaces)),
-           (1...max(session.pageCount, 1)).contains(number) {
-            session.go(toPageIndex: number - 1)
-        }
-        syncPageField()
-    }
-
-    // MARK: - Zoom
-
-    private var zoomControls: some View {
-        HStack(spacing: 4) {
-            Button {
-                session.zoomOut()
-            } label: {
-                Label("Verkleinern", systemImage: "minus.magnifyingglass")
-            }
-            .disabled(session.scaleFactor <= session.minScaleFactor)
-
-            Button(action: session.fitToWindow) {
-                Text(zoomLabel)
-                    .monospacedDigit()
-                    .frame(minWidth: 44)
-            }
-            .help("Auf Fensterbreite anpassen")
-
-            Button {
-                session.zoomIn()
-            } label: {
-                Label("Vergroessern", systemImage: "plus.magnifyingglass")
-            }
-            .disabled(session.scaleFactor >= session.maxScaleFactor)
-        }
-    }
-
-    private var zoomLabel: String {
-        "\(Int((session.scaleFactor * 100).rounded()))\u{00A0}%"
     }
 
     // MARK: - Anzeigemodus

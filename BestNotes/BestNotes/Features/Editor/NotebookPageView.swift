@@ -19,6 +19,17 @@ import UniformTypeIdentifiers
 // MARK: - Hintergrund
 
 final class NotebookPageBackgroundView: NSView {
+    /// Groesse der Seite in PDF-Punkten. Die View wird von SwiftUI groesser
+    /// oder kleiner gerahmt; ihr `bounds` bleibt aber die Seitengroesse —
+    /// dadurch skaliert AppKit Inhalt *und* Unteransichten scharf mit, statt
+    /// ein fertiges Bild zu vergroessern.
+    var pageSize: CGSize = PDFPageFactory.a4 {
+        didSet {
+            applyPageScale()
+            needsDisplay = true
+        }
+    }
+
     var page: PDFPage?
     var ruling: PageRuling = .none
     var insets: TextInsets = .standard
@@ -28,6 +39,16 @@ final class NotebookPageBackgroundView: NSView {
     var onDropFileURL: ((URL) -> Void)?
 
     override var isFlipped: Bool { true }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        applyPageScale()
+    }
+
+    private func applyPageScale() {
+        guard pageSize.width > 0, pageSize.height > 0, bounds.size != pageSize else { return }
+        setBoundsSize(pageSize)
+    }
 
     /// Eine Seite ist weisses Papier, unabhaengig vom Systemdesign. Ohne das
     /// zeichnet AppKit im Dunkelmodus weisse Schrift, weisse Linien und einen
@@ -191,6 +212,7 @@ struct NotebookPageView: NSViewRepresentable {
     }
 
     private func configure(_ view: NotebookPageBackgroundView, context: Context) {
+        view.pageSize = pageSize
         view.page = session.document.page(at: pageIndex)
         view.ruling = containerIndex == nil ? .none : ruling
         view.insets = insets

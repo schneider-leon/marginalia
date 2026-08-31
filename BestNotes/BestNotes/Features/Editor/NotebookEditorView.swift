@@ -5,6 +5,10 @@
 //  Der Schreibmodus eines Notizbuchs: Seiten untereinander, durchlaufender
 //  Text, der von Seite zu Seite fliesst.
 //
+//  Die Fensterleiste ist dieselbe wie in der PDF-Ansicht — Seitennavigation
+//  links, Zoom und Export rechts. Nur die schmale Leiste darunter traegt das,
+//  was zum jeweiligen Modus gehoert.
+//
 
 import AppKit
 import PDFKit
@@ -16,6 +20,7 @@ struct NotebookEditorView: View {
 
     @State private var failure: ViewerFailure?
     @State private var showsLoadWarnings = false
+    @State private var visiblePageID: UUID?
 
     private let pageGap: CGFloat = 24
 
@@ -29,13 +34,39 @@ struct NotebookEditorView: View {
                     pageView(index: index, descriptor: descriptor)
                 }
             }
-            .padding(.vertical, pageGap)
             .frame(maxWidth: .infinity)
+            .scrollTargetLayout()
         }
+        .contentMargins(.vertical, pageGap, for: .scrollContent)
+        .scrollPosition(id: $visiblePageID)
         .background(Color(nsColor: .underPageBackgroundColor))
-        .safeAreaInset(edge: .top, spacing: 0) { toolbar }
+        .background { viewportWidthReader }
+        .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
         .navigationSubtitle(subtitle)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                PageNavigationControls(
+                    currentIndex: currentPageIndex,
+                    pageCount: session.pageDescriptors.count,
+                    goPrevious: { goToPage(currentPageIndex - 1) },
+                    goNext: { goToPage(currentPageIndex + 1) },
+                    goTo: goToPage
+                )
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                ZoomControls(
+                    scale: session.currentScale,
+                    canZoomIn: session.canZoomIn,
+                    canZoomOut: session.canZoomOut,
+                    zoomIn: session.zoomIn,
+                    zoomOut: session.zoomOut,
+                    fit: session.fitToWindow,
+                    fitHelp: "Auf Fensterbreite anpassen"
+                )
+                exportButton
+            }
+        }
         .sessionAlerts(session)
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
@@ -48,37 +79,47 @@ struct NotebookEditorView: View {
         }
     }
 
-    private func saveInPlace() {
-        guard session.hasUnsavedChanges else { return }
-        do { try session.save() } catch { failure = ViewerFailure(error: error) }
-    }
-
-    private func exportCopy() {
-        do { try session.exportCopy() } catch { failure = ViewerFailure(error: error) }
-    }
-
-    private func insertImage(onPage index: Int) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.title = "Bild einfuegen"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let page = min(max(index, 0), max(session.pageDescriptors.count - 1, 0))
-            try session.insertImage(from: url, atPageIndex: page)
-        } catch {
-            failure = ViewerFailure(error: error)
-        }
-    }
-
     private var subtitle: String {
         let pages = "\(session.pageDescriptors.count) Seiten"
         return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
     }
 
+    // MARK: - Seitenlage
+
+    /// Die oberste sichtbare Seite; bevor gescrollt wurde, die zuletzt
+    /// angeklickte.
+    private var currentPageIndex: Int {
+        if let visiblePageID,
+           let index = session.pageDescriptors.firstIndex(where: { $0.id == visiblePageID }) {
+            return index
+        }
+        return min(session.activePageIndex, max(session.pageDescriptors.count - 1, 0))
+    }
+
+    private func goToPage(_ index: Int) {
+        guard session.pageDescriptors.indices.contains(index) else { return }
+        session.activePageIndex = index
+        withAnimation(.easeOut(duration: 0.2)) {
+            visiblePageID = session.pageDescriptors[index].id
+        }
+    }
+
+    private var viewportWidthReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { session.editorViewportWidth = proxy.size.width }
+                .onChange(of: proxy.size.width) { _, width in
+                    session.editorViewportWidth = width
+                }
+        }
+    }
+
+    // MARK: - Seiten
+
     @ViewBuilder
     private func pageView(index: Int, descriptor: PageDescriptor) -> some View {
         let size = session.document.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
+        let zoom = session.editorZoom
         let containerIndex = session.notebook?.writablePageIndices.firstIndex(of: index)
 
         NotebookPageView(
@@ -91,7 +132,7 @@ struct NotebookEditorView: View {
             overlayRevision: session.overlayRevision,
             selectedOverlayID: session.selectedOverlayID
         )
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width * zoom, height: size.height * zoom)
         .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
         .overlay(alignment: .bottomTrailing) {
             Text("\(index + 1)")
@@ -109,9 +150,12 @@ struct NotebookEditorView: View {
         }
     }
 
-    // MARK: - Werkzeugleiste
+    // MARK: - Modusleiste
+    //
+    // Das Gegenstueck zur `AnnotationToolbar`: gleiche Hoehe, gleicher
+    // Aufbau, nur andere Werkzeuge.
 
-    private var toolbar: some View {
+    private var modeToolbar: some View {
         HStack(spacing: 12) {
             Picker("Modus", selection: $session.notebookMode) {
                 ForEach(NotebookMode.allCases) { mode in
@@ -132,7 +176,7 @@ struct NotebookEditorView: View {
             .help("Leere Seite am Ende anhaengen")
 
             Button {
-                insertImage(onPage: session.activePageIndex)
+                insertImage(onPage: currentPageIndex)
             } label: {
                 Label("Bild einfuegen", systemImage: "photo.badge.plus")
             }
@@ -166,11 +210,6 @@ struct NotebookEditorView: View {
             }
             .pickerStyle(.menu)
             .fixedSize()
-
-            Button(action: exportCopy) {
-                Label("Exportieren", systemImage: "square.and.arrow.up")
-            }
-            .help("Als PDF exportieren — getippter Text wird eingebrannt")
 
             Spacer(minLength: 0)
 
@@ -227,5 +266,37 @@ struct NotebookEditorView: View {
             get: { session.ruling },
             set: { session.setRuling($0) }
         )
+    }
+
+    // MARK: - Aktionen
+
+    private var exportButton: some View {
+        Button(action: exportCopy) {
+            Label("Exportieren", systemImage: "square.and.arrow.up")
+        }
+        .help("Als PDF exportieren — getippter Text wird eingebrannt")
+    }
+
+    private func saveInPlace() {
+        guard session.hasUnsavedChanges else { return }
+        do { try session.save() } catch { failure = ViewerFailure(error: error) }
+    }
+
+    private func exportCopy() {
+        do { try session.exportCopy() } catch { failure = ViewerFailure(error: error) }
+    }
+
+    private func insertImage(onPage index: Int) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.title = "Bild einfuegen"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let page = min(max(index, 0), max(session.pageDescriptors.count - 1, 0))
+            try session.insertImage(from: url, atPageIndex: page)
+        } catch {
+            failure = ViewerFailure(error: error)
+        }
     }
 }
