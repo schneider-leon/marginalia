@@ -177,11 +177,11 @@ struct NotebookEditorView: View {
 
     // MARK: - Modusleiste
     //
-    // Das Gegenstueck zur `AnnotationToolbar`: gleiche Hoehe, gleicher
-    // Aufbau, nur andere Werkzeuge.
+    // Dieselbe Leiste wie im Annotationsmodus — `ToolStrip` bringt Hoehe,
+    // Polster, Hintergrund und Stil mit. Hier steht nur der Inhalt.
 
     private var modeToolbar: some View {
-        HStack(spacing: 12) {
+        ToolStrip {
             DocumentModePicker(session: session)
 
             Divider().frame(height: 18)
@@ -252,12 +252,6 @@ struct NotebookEditorView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     private var loadWarningsPopover: some View {

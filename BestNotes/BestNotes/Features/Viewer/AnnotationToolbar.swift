@@ -13,7 +13,7 @@ struct AnnotationToolbar: View {
     @Bindable var session: DocumentSession
 
     var body: some View {
-        HStack(spacing: 12) {
+        ToolStrip {
             DocumentModePicker(session: session)
 
             Divider().frame(height: 18)
@@ -23,12 +23,6 @@ struct AnnotationToolbar: View {
             styleControls
             Spacer(minLength: 0)
             historyControls
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.bar)
-        .overlay(alignment: .bottom) {
-            Divider()
         }
     }
 
