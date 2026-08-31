@@ -41,9 +41,12 @@ struct RootView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             detail
-                // Immer sichtbar: die Startseite ist ein fester Tab.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
+                    // Nur bei geoeffnetem Dokument: auf der Startseite gibt
+                    // es nichts umzuschalten.
+                    if tabs.activeTab != nil {
+                        DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
+                    }
                 }
         }
         .fileImporter(
@@ -106,6 +109,9 @@ struct RootView: View {
                 Button("PDF importieren …", action: presentImporterAtSelection)
                     .buttonStyle(.borderedProminent)
             }
+            // Ohne das nimmt die Ansicht nur die Groesse ihres Inhalts an,
+            // und alles, was oben angesetzt wird, landet in der Mitte.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("BestNotes")
         }
     }
