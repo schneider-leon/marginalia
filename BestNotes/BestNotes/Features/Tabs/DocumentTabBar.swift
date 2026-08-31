@@ -36,7 +36,11 @@ struct DocumentTabBar: View {
         // Ohne das waechst die Hervorhebung des aktiven Tabs nach oben in die
         // Sicherheitszone hinein und liegt dann hinter der Fensterleiste.
         .clipped()
+        // Wie bei der Werkzeugleiste: ohne undurchsichtige Flaeche dahinter
+        // scheint im Schreibmodus das Papier durch — und die Fensterleiste
+        // darueber blendet dann in den beiden Modi gegen Verschiedenes.
         .background(.bar)
+        .background(Color.documentBackground)
         .overlay(alignment: .top) { Divider() }
         .overlay(alignment: .bottom) { Divider() }
     }

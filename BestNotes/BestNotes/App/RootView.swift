@@ -119,7 +119,6 @@ struct RootView: View {
             Group {
                 if session.notebookMode == .write {
                     NotebookEditorView(session: session)
-                        .focusedSceneValue(\.documentSession, session)
                 } else {
                     DocumentViewerView(session: session)
                 }

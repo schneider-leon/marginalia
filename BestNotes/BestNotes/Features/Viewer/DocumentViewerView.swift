@@ -25,7 +25,7 @@ struct DocumentViewerView: View {
             AnnotationToolbar(session: session)
         }
         .navigationTitle(session.displayName)
-        .navigationSubtitle(subtitle)
+        .navigationSubtitle(session.subtitle)
         .toolbar {
             DocumentToolbarContent(
                 session: session,
@@ -54,11 +54,6 @@ struct DocumentViewerView: View {
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
         .sessionAlerts(session)
-    }
-
-    private var subtitle: String {
-        let pages = "\(session.pageCount) Seiten"
-        return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
     }
 
     // MARK: - Export

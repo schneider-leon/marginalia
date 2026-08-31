@@ -50,12 +50,12 @@ struct NotebookEditorView: View {
         .background { viewportWidthReader }
         .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
-        .navigationSubtitle(subtitle)
+        .navigationSubtitle(session.subtitle)
         .toolbar {
             DocumentToolbarContent(
                 session: session,
                 currentIndex: currentPageIndex,
-                pageCount: session.pageDescriptors.count,
+                pageCount: session.pageCount,
                 goPrevious: { goToPage(currentPageIndex - 1) },
                 goNext: { goToPage(currentPageIndex + 1) },
                 goTo: goToPage,
@@ -63,6 +63,7 @@ struct NotebookEditorView: View {
             )
         }
         .sessionAlerts(session)
+        .focusedSceneValue(\.documentSession, session)
         .focusedSceneValue(\.saveDocumentAction, saveInPlace)
         .focusedSceneValue(\.exportDocumentAction, exportCopy)
         .alert(item: $failure) { failure in
@@ -72,11 +73,6 @@ struct NotebookEditorView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
-    }
-
-    private var subtitle: String {
-        let pages = "\(session.pageDescriptors.count) Seiten"
-        return session.hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
     }
 
     // MARK: - Seitenaufteilung
@@ -158,14 +154,13 @@ struct NotebookEditorView: View {
             selectedOverlayID: session.selectedOverlayID
         )
         .frame(width: size.width * zoom, height: size.height * zoom)
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-        .overlay(alignment: .bottomTrailing) {
-            Text("\(index + 1)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(6)
-                .offset(y: 20)
-        }
+        .shadow(
+            color: .black.opacity(DocumentAppearance.pageShadowOpacity),
+            radius: DocumentAppearance.pageShadowRadius,
+            y: DocumentAppearance.pageShadowOffset
+        )
+        // Keine eigene Seitennummer an der Seite: die PDF-Ansicht hat keine,
+        // und die Fensterleiste zeigt „x von y“ ohnehin in beiden Modi.
         .contextMenu {
             Button("Bild einfuegen …") { insertImage(onPage: index) }
             Divider()

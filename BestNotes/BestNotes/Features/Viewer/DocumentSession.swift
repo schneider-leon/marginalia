@@ -197,6 +197,12 @@ final class DocumentSession: Identifiable {
     var url: URL { notebook.url }
 
     var pageCount: Int { document.pageCount }
+
+    /// Zeile unter dem Fenstertitel — in beiden Modi dieselbe.
+    var subtitle: String {
+        let pages = "\(pageCount) Seiten"
+        return hasUnsavedChanges ? "\(pages) — bearbeitet" : pages
+    }
     var canGoToNextPage: Bool { currentPageIndex + 1 < pageCount }
     var canGoToPreviousPage: Bool { currentPageIndex > 0 }
     var canUndo: Bool { _ = editRevision; return undoManager.canUndo }

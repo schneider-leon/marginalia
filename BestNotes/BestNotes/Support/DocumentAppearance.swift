@@ -31,4 +31,13 @@ enum DocumentAppearance {
     /// Abstand um und zwischen den Seiten — in beiden Modi derselbe, damit
     /// die Seite beim Umschalten nicht springt.
     static let pageGap: CGFloat = 24
+
+    /// Schatten unter einer Seite.
+    ///
+    /// Im Schreibmodus zeichnen wir ihn selbst, in der PDF-Ansicht macht das
+    /// PDFKit. Die Werte sind auf dessen dezenteren Schatten abgestimmt —
+    /// genau nachbilden laesst er sich nicht, weil PDFKit ihn intern zieht.
+    static let pageShadowRadius: CGFloat = 4
+    static let pageShadowOpacity: Double = 0.3
+    static let pageShadowOffset: CGFloat = 1
 }
