@@ -13,6 +13,11 @@ struct LibrarySidebar: View {
     let onCreateNotebook: (UUID?) -> UUID?
     let onImportPDF: (UUID?) -> Void
     let onToggleSidebar: () -> Void
+
+    /// Ob die Bibliothek gerade zu sehen ist. Das „+“ gehoert zu ihr und
+    /// verschwindet mit ihr; der Umschalter bleibt, sonst gaebe es keinen
+    /// Weg zurueck.
+    let isSidebarVisible: Bool
     let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
 
@@ -52,7 +57,9 @@ struct LibrarySidebar: View {
         .toolbar(removing: .sidebarToggle)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                addMenu
+                if isSidebarVisible {
+                    addMenu
+                }
                 sidebarToggle
             }
         }

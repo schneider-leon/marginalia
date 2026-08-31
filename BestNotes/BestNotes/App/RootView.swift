@@ -36,6 +36,7 @@ struct RootView: View {
                 onCreateNotebook: createNotebook(in:),
                 onImportPDF: presentImporter(into:),
                 onToggleSidebar: toggleSidebar,
+                isSidebarVisible: sidebarVisibility != .detailOnly,
                 onRename: rename(id:to:),
                 onDelete: delete(id:)
             )
