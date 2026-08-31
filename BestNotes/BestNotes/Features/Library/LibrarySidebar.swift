@@ -30,8 +30,8 @@ struct LibrarySidebar: View {
         .listStyle(.sidebar)
         .overlay {
             if store.roots.isEmpty {
-                // Ohne die Fussleiste ist das „+“ oben nicht mehr in
-                // Blickweite — der leere Zustand bietet den Weg selbst an.
+                // Doppelt zum „+“ darueber, aber beim ersten Start ist ein
+                // benannter Knopf der klarere Einstieg.
                 ContentUnavailableView {
                     Label("Bibliothek ist leer", systemImage: "books.vertical")
                 } description: {
@@ -46,14 +46,13 @@ struct LibrarySidebar: View {
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
-        // Der eingebaute Umschalter sitzt immer ganz links; damit das „+“
-        // davor passt, ersetzen wir ihn durch ein eigenes Paar.
+        // Beide Knoepfe gehoeren in die Sidebar selbst, nicht in die
+        // Fensterleiste: dort entscheidet SwiftUI, ob ein Element ueber der
+        // Sidebar oder ueber dem Dokument landet — und das war nicht die
+        // Sidebar. Als Zeile im Inhalt steht die Reihenfolge fest.
         .toolbar(removing: .sidebarToggle)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                addMenu
-                sidebarToggle
-            }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            sidebarHeader
         }
         .alert("Umbenennen", isPresented: renamingBinding) {
             TextField("Name", text: renameTextBinding)
@@ -82,7 +81,23 @@ struct LibrarySidebar: View {
         }
     }
 
-    // MARK: - Hinzufuegen
+    // MARK: - Kopfzeile
+
+    private var sidebarHeader: some View {
+        HStack(spacing: 2) {
+            addMenu
+            sidebarToggle
+            Spacer(minLength: 0)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
 
     private var addMenu: some View {
         Menu {
@@ -94,6 +109,7 @@ struct LibrarySidebar: View {
             Label("Hinzufuegen", systemImage: "plus")
         }
         .help("Ordner, Notizbuch oder PDF hinzufuegen")
+        .fixedSize()
     }
 
     private var sidebarToggle: some View {
