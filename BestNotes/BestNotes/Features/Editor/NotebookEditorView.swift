@@ -64,6 +64,7 @@ struct NotebookEditorView: View {
                     fit: session.fitToWindow,
                     fitHelp: "Auf Fensterbreite anpassen"
                 )
+                rulingPicker
                 exportButton
             }
         }
@@ -201,16 +202,6 @@ struct NotebookEditorView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
 
-            Divider().frame(height: 18)
-
-            Picker("Linien", selection: rulingBinding) {
-                ForEach(PageRuling.allCases) { ruling in
-                    Text(ruling.label).tag(ruling)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
-
             Spacer(minLength: 0)
 
             if !session.loadWarnings.isEmpty {
@@ -259,6 +250,17 @@ struct NotebookEditorView: View {
         }
         .padding(16)
         .frame(width: 320)
+    }
+
+    /// Gegenstueck zum Anzeigemodus-Picker der PDF-Ansicht: gleiche Stelle,
+    /// gleiche Form, nur betrifft es hier die Seitendarstellung.
+    private var rulingPicker: some View {
+        Picker("Linien", selection: rulingBinding) {
+            ForEach(PageRuling.allCases) { ruling in
+                Label(ruling.label, systemImage: ruling.symbol).tag(ruling)
+            }
+        }
+        .pickerStyle(.menu)
     }
 
     private var rulingBinding: Binding<PageRuling> {

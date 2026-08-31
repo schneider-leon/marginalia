@@ -41,7 +41,11 @@ struct PageNavigationControls: View {
             Text("von \(pageCount)")
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .fixedSize()
         }
+        // Ohne das zieht die Fensterleiste die Gruppe auseinander und „von N“
+        // rutscht vom Eingabefeld weg an den rechten Rand.
+        .fixedSize()
         .onAppear(perform: sync)
         .onChange(of: currentIndex) { sync() }
         .onChange(of: pageCount) { sync() }

@@ -65,6 +65,14 @@ enum PageRuling: String, Codable, CaseIterable, Identifiable {
         case .grid: "Karo"
         }
     }
+
+    var symbol: String {
+        switch self {
+        case .none: "rectangle"
+        case .lines: "line.3.horizontal"
+        case .grid: "square.grid.3x3"
+        }
+    }
 }
 
 struct NotebookInfo: Codable, Hashable {
