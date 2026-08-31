@@ -93,6 +93,30 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertNotNil(reopened.bodyRTF)
     }
 
+    /// Beide Modi teilen sich die Seitenposition — beim Umschalten darf die
+    /// Ansicht nicht wieder vorne anfangen.
+    func testSeitenpositionUeberlebtDenModuswechsel() throws {
+        let package = try NotebookPackage.create(title: "Position", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Position")
+        for _ in 0..<4 { session.insertBlankPage() }
+        XCTAssertEqual(session.pageDescriptors.count, 5)
+
+        session.setCurrentPage(3)
+        session.notebookMode = .annotate
+        XCTAssertEqual(session.currentPageIndex, 3)
+        session.notebookMode = .write
+        XCTAssertEqual(session.currentPageIndex, 3, "Die Seite gehoert dem Dokument, nicht dem Modus")
+
+        // Die PDFView meldet ihre Seite in denselben Wert
+        session.reportPageIndex(1)
+        XCTAssertEqual(session.currentPageIndex, 1)
+
+        session.setCurrentPage(99)
+        XCTAssertEqual(session.currentPageIndex, 4, "Ausserhalb wird geklemmt")
+        session.setCurrentPage(-3)
+        XCTAssertEqual(session.currentPageIndex, 0)
+    }
+
     /// Der Kern der Vereinheitlichung: eine importierte PDF ist ein
     /// Notizbuch wie jedes andere — beschreibbar, erweiterbar, exportierbar.
     func testImportiertePDFVerhaeltSichWieEinNotizbuch() throws {

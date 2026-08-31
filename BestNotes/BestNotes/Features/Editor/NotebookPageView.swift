@@ -189,12 +189,12 @@ struct NotebookPageView: NSViewRepresentable {
 
         view.onDropFileURL = { [weak session] url in
             guard let session else { return }
-            session.activePageIndex = pageIndex
+            session.setCurrentPage(pageIndex)
             try? session.insertImage(from: url, atPageIndex: pageIndex)
         }
         view.onDropImageData = { [weak session] data, ext in
             guard let session else { return }
-            session.activePageIndex = pageIndex
+            session.setCurrentPage(pageIndex)
             session.insertImage(data: data, fileExtension: ext, atPageIndex: pageIndex)
         }
         return view

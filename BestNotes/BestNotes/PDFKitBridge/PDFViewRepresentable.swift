@@ -104,9 +104,11 @@ struct PDFViewRepresentable: NSViewRepresentable {
                 object: view
             )
 
-            // Nach dem ersten Layout steht der Auto-Zoom-Faktor erst fest.
+            // Erst nach dem ersten Layout laesst sich zuverlaessig springen.
             DispatchQueue.main.async { [weak self] in
-                self?.syncStateToSession()
+                guard let self else { return }
+                self.restoreCurrentPage()
+                self.syncStateToSession()
             }
         }
 
@@ -116,6 +118,15 @@ struct PDFViewRepresentable: NSViewRepresentable {
                 session.commandTarget = nil
             }
             pdfView = nil
+        }
+
+        /// Beim Moduswechsel wird die Ansicht neu aufgebaut — sie muss dort
+        /// weitermachen, wo der Nutzer war.
+        private func restoreCurrentPage() {
+            guard let pdfView,
+                  let page = pdfView.document?.page(at: session.currentPageIndex)
+            else { return }
+            pdfView.go(to: page)
         }
 
         // MARK: PDFView -> Session

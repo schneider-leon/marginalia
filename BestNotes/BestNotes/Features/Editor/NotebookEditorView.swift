@@ -46,6 +46,7 @@ struct NotebookEditorView: View {
         .contentMargins(.vertical, pageGap, for: .scrollContent)
         .scrollPosition(id: $visiblePageID)
         .onChange(of: visiblePageID) { _, id in followScrollPosition(id) }
+        .task { restoreScrollPosition() }
         .background { viewportWidthReader }
         .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
@@ -98,15 +99,15 @@ struct NotebookEditorView: View {
 
     // MARK: - Seitenlage
 
-    /// Die aktuelle Seite fuehrt die Session. Beim Scrollen wird sie
-    /// nachgezogen, im Einzelseitenmodus ist sie die einzige sichtbare.
+    /// Die aktuelle Seite fuehrt die Session — dieselbe, die auch die
+    /// PDF-Ansicht benutzt.
     private var currentPageIndex: Int {
-        min(max(session.activePageIndex, 0), max(session.pageDescriptors.count - 1, 0))
+        min(max(session.currentPageIndex, 0), max(session.pageDescriptors.count - 1, 0))
     }
 
     private func goToPage(_ index: Int) {
         guard session.pageDescriptors.indices.contains(index) else { return }
-        session.activePageIndex = index
+        session.setCurrentPage(index)
         guard session.displayMode != .singlePage else { return }
         withAnimation(.easeOut(duration: 0.2)) {
             visiblePageID = session.pageDescriptors[index].id
@@ -118,7 +119,14 @@ struct NotebookEditorView: View {
               let pageID,
               let index = session.pageDescriptors.firstIndex(where: { $0.id == pageID })
         else { return }
-        session.activePageIndex = index
+        session.setCurrentPage(index)
+    }
+
+    /// Beim Moduswechsel wird die Ansicht neu aufgebaut — ohne das faengt
+    /// sie wieder oben an.
+    private func restoreScrollPosition() {
+        guard session.pageDescriptors.indices.contains(currentPageIndex) else { return }
+        visiblePageID = session.pageDescriptors[currentPageIndex].id
     }
 
     private var viewportWidthReader: some View {

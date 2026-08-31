@@ -66,11 +66,15 @@ struct PageNavigationControls: View {
     @State private var fieldText = "1"
 
     var body: some View {
-        HStack(spacing: 4) {
+        // Abstaende einzeln statt gleichmaessig: die Anzeige rueckt naeher
+        // an den Pfeil, die Pille bleibt gleich breit, weil dieselbe Menge
+        // rechts wieder dazukommt.
+        HStack(spacing: 0) {
             Button(action: goPrevious) {
                 Label("Vorherige Seite", systemImage: "chevron.up")
             }
             .disabled(currentIndex <= 0)
+            .padding(.trailing, 4)
 
             Button(action: goNext) {
                 Label("Naechste Seite", systemImage: "chevron.down")
@@ -105,8 +109,9 @@ struct PageNavigationControls: View {
                 .monospacedDigit()
         }
         // Die Fensterleiste legt ihre Kapsel eng um den Inhalt; ohne das
-        // beruehrt die Gesamtzahl den rechten Rand.
-        .padding(.trailing, 8)
+        // beruehrt die Gesamtzahl den rechten Rand. Zusammen mit dem
+        // fehlenden Abstand links bleibt die Pille gleich breit.
+        .padding(.trailing, 12)
         .fixedSize()
     }
 

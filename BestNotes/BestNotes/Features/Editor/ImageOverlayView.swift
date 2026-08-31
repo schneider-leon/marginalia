@@ -128,7 +128,7 @@ final class ImageOverlayNSView: NSView {
         guard let session else { return }
         let point = convert(event.locationInWindow, from: nil)
         window?.makeFirstResponder(self)
-        session.activePageIndex = pageIndex
+        session.setCurrentPage(pageIndex)
 
         for overlay in overlays.reversed() {
             let rect = viewRect(overlay.frame)

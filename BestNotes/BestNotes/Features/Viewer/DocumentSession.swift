@@ -125,7 +125,9 @@ final class DocumentSession: Identifiable {
     var activeTool: AnnotationTool = .select
     var style = AnnotationStyle()
 
-    /// Aus der `PDFView` zurueckgespiegelt — nur der Coordinator schreibt hier.
+    /// Die Seite, auf der man sich befindet — *ein* Wert fuer beide Modi.
+    /// Sonst faengt die andere Ansicht beim Umschalten wieder vorne an.
+    /// Dorthin landen auch eingefuegte Bilder ohne weitere Angabe.
     private(set) var currentPageIndex = 0
 
     private(set) var hasUnsavedChanges = false
@@ -162,10 +164,6 @@ final class DocumentSession: Identifiable {
     private(set) var pageDescriptors: [PageDescriptor] = []
 
     var ruling: PageRuling = .none
-
-    /// Seite, auf der zuletzt gearbeitet wurde — dorthin landen eingefuegte
-    /// Bilder ohne weitere Angabe.
-    var activePageIndex = 0
 
     /// *Ein* Zoomwert fuer beide Modi. Vorher hatte die PDF-Ansicht einen
     /// eigenen und rechnete sich beim Oeffnen selbst einen aus — dadurch
@@ -504,8 +502,13 @@ final class DocumentSession: Identifiable {
     // MARK: Rueckmeldungen (PDFView -> SwiftUI)
 
     func reportPageIndex(_ index: Int) {
-        guard index != currentPageIndex else { return }
-        currentPageIndex = index
+        setCurrentPage(index)
+    }
+
+    func setCurrentPage(_ index: Int) {
+        let clamped = min(max(index, 0), max(pageCount - 1, 0))
+        guard clamped != currentPageIndex else { return }
+        currentPageIndex = clamped
     }
 
     /// Die `PDFView` kann auch selbst zoomen (Trackpad). Der Wert landet im
