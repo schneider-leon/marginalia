@@ -85,11 +85,12 @@ struct PageNavigationControls: View {
         .onChange(of: pageCount) { sync() }
     }
 
-    /// Zahl und Gesamtzahl stecken in *einem* Feld.
+    /// Zahl und Gesamtzahl stecken in *einem* Element.
     ///
-    /// Als zwei nebeneinandergestellte Elemente verteilt die Fensterleiste den
-    /// Platz zwischen ihnen, und „von N“ rutscht nach rechts weg. Innerhalb
-    /// eines Rahmens kann das nicht passieren.
+    /// Kein eigener Rahmen: die Fensterleiste zeichnet um jedes Element schon
+    /// einen, und ein zweiter darin liegender waere kleiner — der aeussere
+    /// schaut dann ringsum heraus. Weil beide Teile zu einem Element gehoeren,
+    /// kann die Leiste sie auch nicht auseinanderziehen.
     private var pageField: some View {
         HStack(spacing: 4) {
             TextField("", text: $fieldText)
@@ -102,13 +103,6 @@ struct PageNavigationControls: View {
             Text("von \(pageCount)")
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(.quinary)
-                .stroke(.separator, lineWidth: 1)
         }
         .fixedSize()
     }
