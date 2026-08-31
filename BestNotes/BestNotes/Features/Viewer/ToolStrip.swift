@@ -14,6 +14,21 @@
 
 import SwiftUI
 
+/// Zusammenhaengende helle Box um eine Gruppe von Werkzeugen — dieselbe
+/// Optik wie beim segmentierten Werkzeugwaehler, damit die Leiste in beiden
+/// Modi einheitlich wirkt.
+struct ToolGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 2) {
+            content()
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7).fill(.quaternary))
+    }
+}
+
 struct ToolStrip<Content: View>: View {
     @ViewBuilder let content: () -> Content
 

@@ -98,15 +98,19 @@ struct AnnotationToolbar: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            Button(action: session.undo) {
-                Label("Widerrufen", systemImage: "arrow.uturn.backward")
-            }
-            .disabled(!session.canUndo)
+            ToolGroup {
+                Button(action: session.undo) {
+                    Label("Widerrufen", systemImage: "arrow.uturn.backward")
+                        .frame(width: 24, height: 20)
+                }
+                .disabled(!session.canUndo)
 
-            Button(action: session.redo) {
-                Label("Wiederholen", systemImage: "arrow.uturn.forward")
+                Button(action: session.redo) {
+                    Label("Wiederholen", systemImage: "arrow.uturn.forward")
+                        .frame(width: 24, height: 20)
+                }
+                .disabled(!session.canRedo)
             }
-            .disabled(!session.canRedo)
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)

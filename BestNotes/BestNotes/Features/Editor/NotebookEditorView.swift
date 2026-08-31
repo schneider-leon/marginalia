@@ -198,41 +198,34 @@ struct NotebookEditorView: View {
 
             Divider().frame(height: 18)
 
-            Menu {
-                Button("Am Ende anhaengen") {
-                    session.insertBlankPage()
+            ToolGroup {
+                Menu {
+                    Button("Am Ende anhaengen") {
+                        session.insertBlankPage()
+                    }
+                    Button("Nach Seite \(currentPageIndex + 1) einfuegen") {
+                        session.insertBlankPage(after: currentPageIndex)
+                    }
+                    .disabled(currentPageIndex + 1 >= session.pageDescriptors.count)
+                } label: {
+                    Label("Seite einfuegen", systemImage: "plus.rectangle.portrait")
                 }
-                Button("Nach Seite \(currentPageIndex + 1) einfuegen") {
-                    session.insertBlankPage(after: currentPageIndex)
-                }
-                .disabled(currentPageIndex + 1 >= session.pageDescriptors.count)
-            } label: {
-                Label("Seite einfuegen", systemImage: "plus.rectangle.portrait")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Leere Seite einfuegen")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Leere Seite einfuegen")
 
-            Button {
-                insertImage(onPage: currentPageIndex)
-            } label: {
-                Label("Bild einfuegen", systemImage: "photo.badge.plus")
+                Button {
+                    insertImage(onPage: currentPageIndex)
+                } label: {
+                    Label("Bild einfuegen", systemImage: "photo.badge.plus")
+                        .frame(width: 24, height: 20)
+                }
+                .help("Bild auf der aktuellen Seite einfuegen — oder eine Datei auf die Seite ziehen")
             }
-            .help("Bild auf der aktuellen Seite einfuegen — oder eine Datei auf die Seite ziehen")
 
             Divider().frame(height: 18)
 
             formatGroup
-
-            Menu {
-                ForEach([9, 10, 11, 12, 13, 14, 18, 24, 36], id: \.self) { size in
-                    Button("\(size) pt") { session.setFontSize(CGFloat(size)) }
-                }
-            } label: {
-                Label("Schriftgroesse", systemImage: "textformat.size")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
 
             Divider().frame(height: 18)
 
@@ -264,16 +257,25 @@ struct NotebookEditorView: View {
     /// Optik des Werkzeugwaehlers im Annotationsmodus: eine zusammenhaengende
     /// helle Box, darin die aktiven Eigenschaften blau.
     private var formatGroup: some View {
-        HStack(spacing: 2) {
+        ToolGroup {
             formatToggle("Fett", symbol: "bold", isOn: session.isBoldActive, action: session.toggleBold)
             formatToggle("Kursiv", symbol: "italic", isOn: session.isItalicActive, action: session.toggleItalic)
             formatToggle(
                 "Unterstrichen", symbol: "underline",
                 isOn: session.isUnderlineActive, action: session.toggleUnderline
             )
+
+            Menu {
+                ForEach([9, 10, 11, 12, 13, 14, 18, 24, 36], id: \.self) { size in
+                    Button("\(size) pt") { session.setFontSize(CGFloat(size)) }
+                }
+            } label: {
+                Label("Schriftgroesse", systemImage: "textformat.size")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Schriftgroesse")
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: 7).fill(.quaternary))
     }
 
     /// Zeigt an, ob die Eigenschaft gerade gilt — blau hinterlegt wie die
