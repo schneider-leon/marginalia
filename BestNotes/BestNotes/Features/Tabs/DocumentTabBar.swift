@@ -11,12 +11,30 @@ struct DocumentTabBar: View {
 
     @State private var hoveredID: UUID?
 
-    private static let barHeight: CGFloat = 32
+    private static let barHeight: CGFloat = 38
+    private static let chipHeight: CGFloat = 26
+
+    /// Eigene Kennung, damit die Startseite denselben Hover-Zustand nutzen
+    /// kann wie die Dokument-Tabs.
+    private static let homeChipID = UUID()
+
+    /// Schaltflaechenoptik wie in der Fensterleiste: Pille, aktiv gefuellt,
+    /// darunter nur beim Ueberfahren angedeutet.
+    @ViewBuilder
+    private static func chipBackground(isActive: Bool, isHovered: Bool) -> some View {
+        if isActive {
+            Capsule().fill(Color.accentColor)
+        } else if isHovered {
+            Capsule().fill(.quaternary)
+        } else {
+            Capsule().fill(.quaternary.opacity(0.4))
+        }
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 1) {
+                HStack(spacing: 6) {
                     homeChip
                     ForEach(store.tabs) { tab in
                         chip(for: tab)
@@ -24,6 +42,7 @@ struct DocumentTabBar: View {
                     }
                     Spacer(minLength: 0)
                 }
+                .padding(.horizontal, 10)
                 .frame(height: Self.barHeight)
             }
             .onChange(of: store.activeID) { _, newValue in
@@ -54,12 +73,11 @@ struct DocumentTabBar: View {
         return Image(systemName: "house")
             .imageScale(.medium)
             .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-            .frame(width: 44)
-            .frame(height: Self.barHeight)
-            .background(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear))
-            .overlay(alignment: .trailing) { Divider() }
-            .contentShape(.rect)
+            .frame(width: 38, height: Self.chipHeight)
+            .background(Self.chipBackground(isActive: isActive, isHovered: hoveredID == Self.homeChipID))
+            .contentShape(.capsule)
             .onTapGesture { store.activateHome() }
+            .onHover { hoveredID = $0 ? Self.homeChipID : (hoveredID == Self.homeChipID ? nil : hoveredID) }
             .help("Startseite")
     }
 
@@ -80,15 +98,12 @@ struct DocumentTabBar: View {
 
             closeControl(for: tab, revealed: isActive || isHovered)
         }
-        .padding(.horizontal, 10)
-        .frame(minWidth: 120, maxWidth: 200)
-        .frame(height: Self.barHeight)
+        .padding(.horizontal, 12)
+        .frame(minWidth: 100, maxWidth: 200)
+        .frame(height: Self.chipHeight)
         // Wie beim Modusumschalter: die aktive Auswahl ist blau hinterlegt.
-        .background(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear))
-        .overlay(alignment: .trailing) {
-            Divider()
-        }
-        .contentShape(.rect)
+        .background(Self.chipBackground(isActive: isActive, isHovered: isHovered))
+        .contentShape(.capsule)
         .onTapGesture { store.activate(tab.id) }
         .onHover { hoveredID = $0 ? tab.id : (hoveredID == tab.id ? nil : hoveredID) }
         .help(tab.title)
