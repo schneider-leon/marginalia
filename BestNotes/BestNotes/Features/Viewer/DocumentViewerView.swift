@@ -37,12 +37,6 @@ struct DocumentViewerView: View {
                 export: exportCopy
             )
         }
-        .sheet(item: $session.pendingComment) { _ in
-            CommentSheet(
-                onCancel: { session.pendingComment = nil },
-                onCommit: { session.commitPendingComment(text: $0) }
-            )
-        }
         .alert(item: $failure) { failure in
             Alert(
                 title: Text(failure.message),

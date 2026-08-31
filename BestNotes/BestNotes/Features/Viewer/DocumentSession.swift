@@ -98,13 +98,6 @@ enum NotebookMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Ein angeklickter Punkt, fuer den noch der Kommentartext fehlt.
-struct PendingComment: Identifiable {
-    let id = UUID()
-    let point: CGPoint
-    let page: PDFPage
-}
-
 // MARK: - Session
 
 @MainActor
@@ -131,7 +124,6 @@ final class DocumentSession: Identifiable {
     private(set) var currentPageIndex = 0
 
     private(set) var hasUnsavedChanges = false
-    var pendingComment: PendingComment?
 
     /// Auffaelligkeiten beim Oeffnen — etwa reparierte Seitenbeschreibungen.
     private(set) var loadWarnings: [String] = []
@@ -594,53 +586,28 @@ final class DocumentSession: Identifiable {
         scheduleAutosave()
     }
 
-    // MARK: Kommentar
+    // MARK: Notizzettel
 
-    func requestComment(at point: CGPoint, on page: PDFPage) {
-        pendingComment = PendingComment(point: point, page: page)
+    func noteMoved(_ annotation: PDFAnnotation, on page: PDFPage, from oldBounds: CGRect) {
+        let newBounds = annotation.bounds
+        guard newBounds != oldBounds else { return }
+        undoManager.setActionName("Zettel bewegen")
+        undoManager.registerUndo(withTarget: self) { session in
+            annotation.bounds = oldBounds
+            session.noteMoved(annotation, on: page, from: newBounds)
+        }
+        didEdit()
     }
 
-    func commitPendingComment(text: String) {
-        guard let pending = pendingComment else { return }
-        pendingComment = nil
-
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let annotation = PDFAnnotation(
-            bounds: commentBounds(for: trimmed, at: pending.point, on: pending.page),
-            forType: .freeText,
-            withProperties: nil
-        )
-        annotation.contents = trimmed
-        annotation.font = .systemFont(ofSize: style.textSize)
-        annotation.fontColor = style.textNSColor
-        annotation.color = .clear
-        annotation.alignment = .left
-
-        addAnnotations([annotation], on: pending.page, actionName: "Kommentar")
-    }
-
-    private func commentBounds(for text: String, at point: CGPoint, on page: PDFPage) -> CGRect {
-        let font = NSFont.systemFont(ofSize: style.textSize)
-        let maxWidth: CGFloat = 260
-        let padding: CGFloat = 6
-
-        let measured = (text as NSString).boundingRect(
-            with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font]
-        )
-        let size = CGSize(
-            width: min(maxWidth, ceil(measured.width)) + padding * 2,
-            height: ceil(measured.height) + padding * 2
-        )
-
-        // Der Klickpunkt ist die obere linke Ecke; danach in die Seite klemmen.
-        let pageBounds = page.bounds(for: .cropBox)
-        let x = min(max(point.x, pageBounds.minX), pageBounds.maxX - size.width)
-        let y = min(max(point.y - size.height, pageBounds.minY), pageBounds.maxY - size.height)
-        return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    func noteEdited(_ annotation: PDFAnnotation, on page: PDFPage, from oldText: String?) {
+        let newText = annotation.contents
+        guard newText != oldText else { return }
+        undoManager.setActionName("Zettel beschriften")
+        undoManager.registerUndo(withTarget: self) { session in
+            annotation.contents = oldText
+            session.noteEdited(annotation, on: page, from: newText)
+        }
+        didEdit()
     }
 
     // MARK: Speichern & Export
@@ -690,7 +657,11 @@ extension DocumentSession: AnnotationEditingDelegate {
         removeAnnotations([annotation], on: page, actionName: "Loeschen")
     }
 
-    func annotationView(_ view: AnnotatingPDFView, didRequestCommentAt point: CGPoint, on page: PDFPage) {
-        requestComment(at: point, on: page)
+    func annotationView(_ view: AnnotatingPDFView, didMove annotation: PDFAnnotation, on page: PDFPage, from oldBounds: CGRect) {
+        noteMoved(annotation, on: page, from: oldBounds)
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, didEditNote annotation: PDFAnnotation, on page: PDFPage, from oldText: String?) {
+        noteEdited(annotation, on: page, from: oldText)
     }
 }

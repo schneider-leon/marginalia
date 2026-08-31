@@ -186,6 +186,45 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(reopened.textEngine.textStorage.string, "Gespeichert im Annotationsmodus.")
     }
 
+    func testZettelBewegenUndBeschriftenLassenSichWiderrufen() throws {
+        let package = try NotebookPackage.create(title: "Zettel", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Zettel")
+        session.undoManager.groupsByEvent = false
+        let page = try XCTUnwrap(package.pdf.page(at: 0))
+
+        let note = PDFAnnotation(
+            bounds: CGRect(x: 60, y: 600, width: 180, height: 90),
+            forType: .freeText, withProperties: nil
+        )
+        note.contents = ""
+        TestSupport.undoGroup(session.undoManager) {
+            session.addAnnotations([note], on: page, actionName: "Zettel")
+        }
+
+        TestSupport.undoGroup(session.undoManager) {
+            note.contents = "Erste Fassung"
+            session.noteEdited(note, on: page, from: "")
+        }
+        XCTAssertEqual(page.annotations.first?.contents, "Erste Fassung")
+
+        let moved = CGRect(x: 200, y: 400, width: 180, height: 90)
+        TestSupport.undoGroup(session.undoManager) {
+            note.bounds = moved
+            session.noteMoved(note, on: page, from: CGRect(x: 60, y: 600, width: 180, height: 90))
+        }
+        XCTAssertEqual(note.bounds, moved)
+
+        session.undo()
+        XCTAssertEqual(note.bounds.origin.y, 600, "Bewegung nicht widerrufen")
+        XCTAssertEqual(note.contents, "Erste Fassung", "Der Text darf dabei bleiben")
+
+        session.undo()
+        XCTAssertEqual(note.contents, "", "Beschriftung nicht widerrufen")
+
+        session.redo()
+        XCTAssertEqual(note.contents, "Erste Fassung")
+    }
+
     /// Beide Modi teilen sich die Seitenposition — beim Umschalten darf die
     /// Ansicht nicht wieder vorne anfangen.
     func testSeitenpositionUeberlebtDenModuswechsel() throws {

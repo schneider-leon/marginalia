@@ -13,7 +13,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
     case highlight
     /// Freihandstrich als Ink-Annotation.
     case ink
-    /// Klick setzt einen getippten Kommentar (FreeText-Annotation).
+    /// Aufgezogenes Feld mit getipptem Text — ein Notizzettel.
     case text
     /// Klick entfernt die getroffene Annotation.
     case eraser
@@ -25,7 +25,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
         case .select: "Auswahl"
         case .highlight: "Markieren"
         case .ink: "Freihand"
-        case .text: "Kommentar"
+        case .text: "Notizzettel"
         case .eraser: "Radierer"
         }
     }
@@ -35,7 +35,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
         case .select: "cursorarrow"
         case .highlight: "highlighter"
         case .ink: "pencil.tip"
-        case .text: "text.bubble"
+        case .text: "note.text"
         case .eraser: "eraser"
         }
     }
@@ -63,8 +63,16 @@ struct AnnotationStyle {
     var inkWidth: CGFloat = 2
     var textColor: Color = .black
     var textSize: CGFloat = 13
+    /// Hintergrund des Notizzettels.
+    var noteColor: Color = Color(red: 1.0, green: 0.90, blue: 0.55)
 
     var highlightNSColor: NSColor { NSColor(highlightColor).withAlphaComponent(0.35) }
     var inkNSColor: NSColor { NSColor(inkColor) }
     var textNSColor: NSColor { NSColor(textColor) }
+    var noteNSColor: NSColor { NSColor(noteColor) }
+
+    /// Groesse eines Zettels, den der Nutzer nur angeklickt statt aufgezogen hat.
+    static let defaultNoteSize = CGSize(width: 180, height: 90)
+    /// Darunter gilt ein Zug als Klick.
+    static let minimumNoteSize = CGSize(width: 40, height: 28)
 }

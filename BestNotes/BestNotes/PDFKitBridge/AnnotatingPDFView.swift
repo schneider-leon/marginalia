@@ -21,7 +21,12 @@ protocol AnnotationEditingDelegate: AnyObject {
 
     func annotationView(_ view: AnnotatingPDFView, didCreate annotations: [PDFAnnotation], on page: PDFPage, actionName: String)
     func annotationView(_ view: AnnotatingPDFView, didErase annotation: PDFAnnotation, on page: PDFPage)
-    func annotationView(_ view: AnnotatingPDFView, didRequestCommentAt point: CGPoint, on page: PDFPage)
+
+    /// Ein Zettel wurde verschoben — nur noch fuer Undo zu vermerken.
+    func annotationView(_ view: AnnotatingPDFView, didMove annotation: PDFAnnotation, on page: PDFPage, from oldBounds: CGRect)
+
+    /// Der Text eines Zettels wurde geaendert.
+    func annotationView(_ view: AnnotatingPDFView, didEditNote annotation: PDFAnnotation, on page: PDFPage, from oldText: String?)
 }
 
 final class AnnotatingPDFView: PDFView {
@@ -31,6 +36,9 @@ final class AnnotatingPDFView: PDFView {
     var activeTool: AnnotationTool = .select {
         didSet {
             guard activeTool != oldValue else { return }
+            // Beim Werkzeugwechsel die laufende Eingabe abschliessen, sonst
+            // schwebt das Eingabefeld ohne zugehoeriges Werkzeug weiter.
+            noteEditor.finish()
             if !activeTool.usesTextSelection { clearSelection() }
             window?.invalidateCursorRects(for: self)
         }
@@ -43,10 +51,34 @@ final class AnnotatingPDFView: PDFView {
     private var livePage: PDFPage?
     private var livePoints: [CGPoint] = []
 
+    // Zustand beim Aufziehen oder Verschieben eines Notizzettels
+    private var noteOrigin: CGPoint?
+    private var movingNote: (annotation: PDFAnnotation, page: PDFPage, start: CGRect, grab: CGPoint)?
+
+    private let noteEditor = StickyNoteEditor()
+
     // MARK: - Undo aus der Responder-Chain
 
     override var undoManager: UndoManager? {
         editingDelegate?.annotationUndoManager
+    }
+
+    /// Verbindet den Zetteleditor mit dem Delegaten. Wird vom Coordinator
+    /// nach dem Aufbau gerufen.
+    func prepareNoteEditor() {
+        noteEditor.onFinish = { [weak self] annotation, page, oldText, isEmpty in
+            guard let self else { return }
+            if isEmpty {
+                self.editingDelegate?.annotationView(self, didErase: annotation, on: page)
+            } else if annotation.contents != oldText {
+                self.editingDelegate?.annotationView(self, didEditNote: annotation, on: page, from: oldText)
+            }
+            self.needsDisplay = true
+        }
+    }
+
+    func finishNoteEditing() {
+        noteEditor.finish()
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -81,7 +113,7 @@ final class AnnotatingPDFView: PDFView {
             beginStroke(at: point, on: page)
 
         case .text:
-            editingDelegate?.annotationView(self, didRequestCommentAt: point, on: page)
+            beginNoteInteraction(at: point, on: page)
 
         case .eraser:
             if let hit = page.annotation(at: point) {
@@ -91,18 +123,24 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard activeTool == .ink else {
+        switch activeTool {
+        case .ink:
+            guard let (page, point) = locate(event), page === livePage else { return }
+            extendStroke(to: point)
+        case .text:
+            guard let (_, point) = locate(event) else { return }
+            dragNote(to: point)
+        default:
             super.mouseDragged(with: event)
-            return
         }
-        guard let (page, point) = locate(event), page === livePage else { return }
-        extendStroke(to: point)
     }
 
     override func mouseUp(with event: NSEvent) {
         switch activeTool {
         case .ink:
             endStroke()
+        case .text:
+            endNoteInteraction()
         case .highlight:
             super.mouseUp(with: event)
             convertSelectionToHighlights()
@@ -199,6 +237,101 @@ final class AnnotatingPDFView: PDFView {
             path.line(to: last)
         }
         return path
+    }
+
+    // MARK: - Notizzettel
+
+    /// Auf einem vorhandenen Zettel beginnt ein Verschieben, sonst wird ein
+    /// neuer aufgezogen.
+    private func beginNoteInteraction(at point: CGPoint, on page: PDFPage) {
+        noteEditor.finish()
+
+        if let hit = page.annotation(at: point), hit.type == "FreeText" {
+            movingNote = (hit, page, hit.bounds, CGPoint(x: point.x - hit.bounds.minX, y: point.y - hit.bounds.minY))
+            return
+        }
+
+        let annotation = makeNote(bounds: CGRect(origin: point, size: .zero))
+        page.addAnnotation(annotation)
+        liveAnnotation = annotation
+        livePage = page
+        noteOrigin = point
+        needsDisplay = true
+    }
+
+    private func dragNote(to point: CGPoint) {
+        if let moving = movingNote {
+            var bounds = moving.start
+            bounds.origin = CGPoint(x: point.x - moving.grab.x, y: point.y - moving.grab.y)
+            moving.annotation.bounds = clampToPage(bounds, on: moving.page)
+            needsDisplay = true
+            return
+        }
+
+        guard let annotation = liveAnnotation, let origin = noteOrigin else { return }
+        annotation.bounds = CGRect(
+            x: min(origin.x, point.x),
+            y: min(origin.y, point.y),
+            width: abs(point.x - origin.x),
+            height: abs(point.y - origin.y)
+        )
+        needsDisplay = true
+    }
+
+    private func endNoteInteraction() {
+        if let moving = movingNote {
+            movingNote = nil
+            if moving.annotation.bounds != moving.start {
+                editingDelegate?.annotationView(
+                    self, didMove: moving.annotation, on: moving.page, from: moving.start
+                )
+            }
+            beginEditing(moving.annotation, on: moving.page)
+            return
+        }
+
+        guard let annotation = liveAnnotation, let page = livePage else { return }
+        liveAnnotation = nil
+        livePage = nil
+        noteOrigin = nil
+
+        // Ein blosser Klick zieht kein Feld auf — dann eine Standardgroesse.
+        if annotation.bounds.width < AnnotationStyle.minimumNoteSize.width
+            || annotation.bounds.height < AnnotationStyle.minimumNoteSize.height {
+            annotation.bounds = clampToPage(
+                CGRect(origin: annotation.bounds.origin, size: AnnotationStyle.defaultNoteSize),
+                on: page
+            )
+        }
+
+        editingDelegate?.annotationView(self, didFinishLive: annotation, on: page)
+        beginEditing(annotation, on: page)
+    }
+
+    private func beginEditing(_ annotation: PDFAnnotation, on page: PDFPage) {
+        prepareNoteEditor()
+        noteEditor.begin(editing: annotation, on: page, in: self, style: style)
+    }
+
+    private func makeNote(bounds: CGRect) -> PDFAnnotation {
+        let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
+        annotation.contents = ""
+        annotation.font = .systemFont(ofSize: style.textSize)
+        annotation.fontColor = style.textNSColor
+        annotation.color = style.noteNSColor
+        annotation.alignment = .left
+        let border = PDFBorder()
+        border.lineWidth = 0
+        annotation.border = border
+        return annotation
+    }
+
+    private func clampToPage(_ rect: CGRect, on page: PDFPage) -> CGRect {
+        let bounds = page.bounds(for: displayBox)
+        var result = rect
+        result.origin.x = min(max(result.minX, bounds.minX), bounds.maxX - result.width)
+        result.origin.y = min(max(result.minY, bounds.minY), bounds.maxY - result.height)
+        return result
     }
 
     // MARK: - Highlight aus der Textauswahl

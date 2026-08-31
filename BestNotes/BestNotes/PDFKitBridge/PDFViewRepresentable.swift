@@ -68,6 +68,9 @@ struct PDFViewRepresentable: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: AnnotatingPDFView, coordinator: Coordinator) {
+        // Beim Moduswechsel verschwindet die Ansicht; eine offene Eingabe
+        // muss vorher noch in die Annotation geschrieben werden.
+        nsView.finishNoteEditing()
         coordinator.detach()
     }
 

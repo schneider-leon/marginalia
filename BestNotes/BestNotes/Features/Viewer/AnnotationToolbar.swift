@@ -62,14 +62,22 @@ struct AnnotationToolbar: View {
                 .foregroundStyle(.secondary)
 
         case .text:
-            ColorPicker("Farbe", selection: $session.style.textColor, supportsOpacity: false)
+            ColorPicker("Zettelfarbe", selection: $session.style.noteColor, supportsOpacity: false)
                 .labelsHidden()
+                .help("Hintergrund des Zettels")
+            ColorPicker("Schriftfarbe", selection: $session.style.textColor, supportsOpacity: false)
+                .labelsHidden()
+                .help("Schriftfarbe")
             Stepper(value: $session.style.textSize, in: 8...48, step: 1) {
                 Text("\(Int(session.style.textSize)) pt")
                     .font(.callout)
                     .monospacedDigit()
             }
             .fixedSize()
+
+            Text("Feld aufziehen und schreiben; Zettel lassen sich ziehen.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
 
         case .eraser:
             Text("Klicke auf eine Annotation, um sie zu entfernen.")
