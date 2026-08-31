@@ -175,14 +175,7 @@ struct NotebookEditorView: View {
 
     private var modeToolbar: some View {
         HStack(spacing: 12) {
-            Picker("Modus", selection: $session.notebookMode) {
-                ForEach(NotebookMode.allCases) { mode in
-                    Label(mode.label, systemImage: mode.symbol).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            DocumentModePicker(session: session)
 
             Divider().frame(height: 18)
 
