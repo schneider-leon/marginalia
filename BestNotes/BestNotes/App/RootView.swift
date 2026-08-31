@@ -61,7 +61,8 @@ struct RootView: View {
         .focusedSceneValue(\.tabsStore, tabs)
         // macOS zieht den Trennstrich unter der Titelleiste nach dem
         // Scrollzustand des Inhalts — das sah je nach Dokument anders aus.
-        // Wir schalten ihn ab und zeichnen ihn selbst an der Tab-Leiste.
+        // Er bleibt abgeschaltet; die Tab-Leiste grenzt sich ueber ihren
+        // Hintergrund ab, nicht ueber Linien.
         .configureWindow { $0.titlebarSeparatorStyle = .none }
         .task { showStartupWarningIfNeeded() }
         // Netz unter der Autosicherung: beim Beenden und beim Wegklicken der

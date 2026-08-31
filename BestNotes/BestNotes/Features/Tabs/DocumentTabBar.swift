@@ -61,8 +61,6 @@ struct DocumentTabBar: View {
         // darueber blendet dann in den beiden Modi gegen Verschiedenes.
         .background(.bar)
         .background(Color.documentBackground)
-        .overlay(alignment: .top) { Divider() }
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     /// Immer da und nicht schliessbar — deshalb nur ein Symbol, ohne Titel
