@@ -250,6 +250,7 @@ final class DocumentSession: Identifiable {
     private func textDidChange() {
         hasUnsavedChanges = true
         editRevision &+= 1
+        formattingRevision &+= 1
         scheduleAutosave()
         // Seiten erst im naechsten Durchlauf nachziehen: waehrend der
         // Layout-Manager noch mit der Aenderung beschaeftigt ist, darf man
@@ -426,6 +427,44 @@ final class DocumentSession: Identifiable {
         activeTextView?.selectedRange() ?? NSRange(location: 0, length: 0)
     }
 
+    /// Zaehler, damit SwiftUI den Zustand der Formatknoepfe neu bewertet.
+    /// Weder `typingAttributes` noch die Auswahl sind observierbar.
+    private(set) var formattingRevision = 0
+
+    /// Die Schrift, die eine Aenderung jetzt betreffen wuerde: bei Auswahl
+    /// die des ausgewaehlten Texts, sonst die des naechsten Tastendrucks.
+    private var currentFont: NSFont {
+        let range = selectedTextRange
+        if range.length > 0, range.location < textEngine.textStorage.length,
+           let font = textEngine.textStorage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont {
+            return font
+        }
+        if let font = activeTextView?.typingAttributes[.font] as? NSFont {
+            return font
+        }
+        return NotebookTextEngine.defaultFont
+    }
+
+    var isBoldActive: Bool {
+        _ = formattingRevision
+        return NSFontManager.shared.traits(of: currentFont).contains(.boldFontMask)
+    }
+
+    var isItalicActive: Bool {
+        _ = formattingRevision
+        return NSFontManager.shared.traits(of: currentFont).contains(.italicFontMask)
+    }
+
+    var currentFontSize: CGFloat {
+        _ = formattingRevision
+        return currentFont.pointSize
+    }
+
+    /// Die Textansicht meldet Cursor- und Auswahlwechsel hierher.
+    func reportSelectionChanged() {
+        formattingRevision &+= 1
+    }
+
     func toggleBold() {
         applyTrait(.boldFontMask)
     }
@@ -436,6 +475,7 @@ final class DocumentSession: Identifiable {
 
     func setFontSize(_ size: CGFloat) {
         let range = selectedTextRange
+        defer { formattingRevision &+= 1 }
         if range.length > 0 {
             textEngine.setFontSize(size, in: range)
         } else {
@@ -448,6 +488,7 @@ final class DocumentSession: Identifiable {
     /// nachtraeglich setzen, nicht vorher einschalten.
     private func applyTrait(_ trait: NSFontTraitMask) {
         let range = selectedTextRange
+        defer { formattingRevision &+= 1 }
         if range.length > 0 {
             textEngine.toggleTrait(trait, in: range)
             return

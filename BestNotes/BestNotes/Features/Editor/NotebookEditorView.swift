@@ -222,12 +222,8 @@ struct NotebookEditorView: View {
 
             Divider().frame(height: 18)
 
-            Button(action: session.toggleBold) {
-                Label("Fett", systemImage: "bold")
-            }
-            Button(action: session.toggleItalic) {
-                Label("Kursiv", systemImage: "italic")
-            }
+            formatToggle("Fett", symbol: "bold", isOn: session.isBoldActive, action: session.toggleBold)
+            formatToggle("Kursiv", symbol: "italic", isOn: session.isItalicActive, action: session.toggleItalic)
 
             Menu {
                 ForEach([9, 10, 11, 12, 13, 14, 18, 24, 36], id: \.self) { size in
@@ -264,6 +260,26 @@ struct NotebookEditorView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Zeigt an, ob die Eigenschaft gerade gilt — blau hinterlegt wie die
+    /// aktive Auswahl des Modusumschalters.
+    private func formatToggle(
+        _ label: String,
+        symbol: String,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: symbol)
+                .frame(width: 24, height: 20)
+                .background(
+                    isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear),
+                    in: RoundedRectangle(cornerRadius: 5)
+                )
+                .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        }
+        .help(label)
     }
 
     private var loadWarningsPopover: some View {

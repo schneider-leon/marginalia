@@ -248,10 +248,12 @@ struct NotebookPageView: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let view = notification.object as? NSTextView else { return }
             session.activeTextView = view
+            session.reportSelectionChanged()
         }
 
         func textDidBeginEditing(_ notification: Notification) {
             session.activeTextView = notification.object as? NSTextView
+            session.reportSelectionChanged()
         }
     }
 }

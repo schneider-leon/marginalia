@@ -106,13 +106,21 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.italicFontMask))
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask), "Fett darf dabei nicht abfallen")
 
+        // Der Zustand muss sich auch ablesen lassen, sonst kann die Leiste
+        // ihn nicht anzeigen.
+        XCTAssertTrue(session.isBoldActive)
+        XCTAssertTrue(session.isItalicActive)
+
         session.setFontSize(24)
         font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
         XCTAssertEqual(font.pointSize, 24)
+        XCTAssertEqual(session.currentFontSize, 24)
 
         session.toggleBold()
         font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
         XCTAssertFalse(NSFontManager.shared.traits(of: font).contains(.boldFontMask), "Erneutes Umschalten nimmt es zurueck")
+        XCTAssertFalse(session.isBoldActive)
+        XCTAssertTrue(session.isItalicActive, "Kursiv bleibt davon unberuehrt")
 
         // Mit Auswahl geht es weiterhin an den vorhandenen Text
         engine.textStorage.setAttributedString(NSAttributedString(
@@ -122,6 +130,7 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         session.toggleBold()
         let applied = try XCTUnwrap(engine.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
         XCTAssertTrue(NSFontManager.shared.traits(of: applied).contains(.boldFontMask))
+        XCTAssertTrue(session.isBoldActive, "Bei Auswahl zeigt der Knopf den Zustand des Texts")
     }
 
     func testTextUndFormatUeberlebenDasSichern() throws {
