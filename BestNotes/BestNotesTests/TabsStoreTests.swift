@@ -21,6 +21,31 @@ final class TabsStoreTests: XCTestCase {
         return store
     }
 
+    func testStartseiteIstDerAusgangszustand() throws {
+        let store = TabsStore()
+        XCTAssertTrue(store.isShowingHome)
+        XCTAssertNil(store.activeTab)
+
+        try store.open(a)
+        XCTAssertFalse(store.isShowingHome)
+
+        store.activateHome()
+        XCTAssertTrue(store.isShowingHome)
+        XCTAssertNil(store.activeTab)
+        XCTAssertEqual(store.tabs.count, 1, "Die Startseite verdraengt keinen Tab")
+
+        store.activate(a.id)
+        XCTAssertFalse(store.isShowingHome)
+    }
+
+    func testLetzterTabGeschlossenFuehrtZurStartseite() throws {
+        let store = TabsStore()
+        try store.open(a)
+        store.close(id: a.id)
+        XCTAssertTrue(store.isShowingHome)
+        XCTAssertTrue(store.isEmpty)
+    }
+
     func testOrdnerBekommtKeinenTab() throws {
         let store = TabsStore()
         try store.open(.folder("Ordner"))

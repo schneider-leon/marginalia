@@ -31,6 +31,10 @@ struct DocumentTab: Identifiable {
 final class TabsStore {
 
     private(set) var tabs: [DocumentTab] = []
+
+    /// `nil` heisst: die Startseite ist aktiv. Sie ist immer da und laesst
+    /// sich nicht schliessen, deshalb braucht sie keinen eigenen Eintrag in
+    /// `tabs` — die Abwesenheit eines Dokuments *ist* der Zustand.
     private(set) var activeID: UUID?
 
     var activeTab: DocumentTab? {
@@ -66,6 +70,12 @@ final class TabsStore {
 
         tabs.append(DocumentTab(id: node.id, title: node.name, kind: node.kind, session: session))
         activeID = node.id
+    }
+
+    var isShowingHome: Bool { activeID == nil }
+
+    func activateHome() {
+        activeID = nil
     }
 
     func activate(_ id: UUID) {

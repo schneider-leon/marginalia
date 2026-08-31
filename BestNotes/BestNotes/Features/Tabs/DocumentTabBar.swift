@@ -17,6 +17,7 @@ struct DocumentTabBar: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 1) {
+                    homeChip
                     ForEach(store.tabs) { tab in
                         chip(for: tab)
                             .id(tab.id)
@@ -43,6 +44,23 @@ struct DocumentTabBar: View {
         .background(Color.documentBackground)
         .overlay(alignment: .top) { Divider() }
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// Immer da und nicht schliessbar — deshalb nur ein Symbol, ohne Titel
+    /// und ohne Schliessen-Knopf.
+    private var homeChip: some View {
+        let isActive = store.isShowingHome
+
+        return Image(systemName: "house")
+            .imageScale(.medium)
+            .foregroundStyle(isActive ? .primary : .secondary)
+            .frame(width: 44)
+            .frame(height: Self.barHeight)
+            .background(isActive ? AnyShapeStyle(.selection.opacity(0.35)) : AnyShapeStyle(.clear))
+            .overlay(alignment: .trailing) { Divider() }
+            .contentShape(.rect)
+            .onTapGesture { store.activateHome() }
+            .help("Startseite")
     }
 
     private func chip(for tab: DocumentTab) -> some View {

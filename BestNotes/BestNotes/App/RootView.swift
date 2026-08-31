@@ -41,10 +41,9 @@ struct RootView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             detail
+                // Immer sichtbar: die Startseite ist ein fester Tab.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if !tabs.isEmpty {
-                        DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
-                    }
+                    DocumentTabBar(store: tabs, onRequestClose: requestClose(id:))
                 }
         }
         .fileImporter(
@@ -156,7 +155,12 @@ struct RootView: View {
     /// Die Gleichheitspruefung verhindert, dass sich beide Richtungen
     /// gegenseitig aufschaukeln.
     private func syncSelectionToActiveTab() {
-        guard let activeID = tabs.activeID, selection != activeID else { return }
+        guard let activeID = tabs.activeID else {
+            // Startseite: nichts in der Bibliothek ist gerade offen.
+            selection = nil
+            return
+        }
+        guard selection != activeID else { return }
         selection = activeID
     }
 
