@@ -37,6 +37,7 @@ struct DocumentTabBar: View {
         // Sicherheitszone hinein und liegt dann hinter der Fensterleiste.
         .clipped()
         .background(.bar)
+        .overlay(alignment: .top) { Divider() }
         .overlay(alignment: .bottom) { Divider() }
     }
 

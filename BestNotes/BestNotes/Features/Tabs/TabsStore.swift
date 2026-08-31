@@ -56,16 +56,12 @@ final class TabsStore {
             return
         }
 
+        // Jedes Dokument wird als Notizbuchpaket geoeffnet — auch eine
+        // importierte PDF. Es gibt keinen zweiten Weg.
         var session: DocumentSession?
-        if let url = node.documentURL {
-            switch node.kind {
-            case .pdf:
-                session = try DocumentSession(pdfAt: url, name: node.name)
-            case .notebook:
-                session = DocumentSession(package: try NotebookPackage.read(from: url), name: node.name)
-            case .folder:
-                break
-            }
+        if node.documentURL != nil {
+            let package = try DocumentStore.openPackage(id: node.id, title: node.name)
+            session = DocumentSession(package: package, name: node.name)
         }
 
         tabs.append(DocumentTab(id: node.id, title: node.name, kind: node.kind, session: session))

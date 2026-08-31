@@ -41,18 +41,19 @@ enum NotebookLibraryLocation {
             .appendingPathExtension(UTType.bestNotebookExtension)
     }
 
-    static func pdfURL(for id: UUID, in root: URL? = nil) -> URL {
+    /// Nur noch fuer die Migration aelterer Bibliotheken, in denen
+    /// importierte PDFs als lose Datei lagen.
+    static func legacyPDFURL(for id: UUID, in root: URL? = nil) -> URL {
         (root ?? libraryRoot)
             .appending(path: id.uuidString, directoryHint: .notDirectory)
             .appendingPathExtension("pdf")
     }
 
     /// Datei zu einem Bibliothekseintrag — Ordner haben keine.
+    ///
+    /// Notizbuch und importierte PDF liegen beide als Paket: `kind`
+    /// unterscheidet nur noch das Symbol in der Sidebar, nicht das Format.
     static func documentURL(for id: UUID, kind: LibraryNode.Kind, in root: URL? = nil) -> URL? {
-        switch kind {
-        case .folder: nil
-        case .notebook: packageURL(for: id, in: root)
-        case .pdf: pdfURL(for: id, in: root)
-        }
+        kind == .folder ? nil : packageURL(for: id, in: root)
     }
 }

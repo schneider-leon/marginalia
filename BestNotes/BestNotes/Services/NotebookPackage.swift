@@ -162,6 +162,38 @@ final class NotebookPackage {
         return package
     }
 
+    /// Legt ein Notizbuch an, dessen Seiten aus einer PDF stammen.
+    ///
+    /// Damit ist eine importierte PDF im Programm kein Sonderfall, sondern
+    /// ein Notizbuch wie jedes andere — nur eben ohne leere Seiten. Seiten
+    /// anhaengen, beschreiben und annotieren funktioniert danach genauso.
+    static func create(
+        id: UUID = UUID(),
+        title: String,
+        from document: PDFDocument,
+        sourceName: String,
+        at directory: URL
+    ) throws -> NotebookPackage {
+        guard document.pageCount > 0 else {
+            throw NotebookPackageError.unreadablePDF
+        }
+        var info = NotebookInfo(id: id, title: title)
+        info.pages = (0..<document.pageCount).map { _ in
+            PageDescriptor(kind: .imported, source: sourceName)
+        }
+
+        let package = NotebookPackage(
+            url: NotebookLibraryLocation.packageURL(for: id, in: directory),
+            info: info,
+            pdf: document,
+            overlays: OverlayDocument(),
+            bodyRTF: nil,
+            pdfNeedsRewrite: true
+        )
+        try package.write()
+        return package
+    }
+
     // MARK: - Lesen
 
     static func read(from url: URL) throws -> NotebookPackage {

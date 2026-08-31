@@ -46,7 +46,7 @@ struct NotebookEditorView: View {
         .contentMargins(.vertical, pageGap, for: .scrollContent)
         .scrollPosition(id: $visiblePageID)
         .onChange(of: visiblePageID) { _, id in followScrollPosition(id) }
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(Color.documentBackground.ignoresSafeArea())
         .background { viewportWidthReader }
         .safeAreaInset(edge: .top, spacing: 0) { modeToolbar }
         .navigationTitle(session.displayName)
@@ -138,7 +138,7 @@ struct NotebookEditorView: View {
     private func pageView(index: Int) -> some View {
         let size = session.document.page(at: index)?.bounds(for: .cropBox).size ?? PDFPageFactory.a4
         let zoom = session.editorZoom
-        let containerIndex = session.notebook?.writablePageIndices.firstIndex(of: index)
+        let containerIndex = session.notebook.writablePageIndices.firstIndex(of: index)
 
         NotebookPageView(
             session: session,
@@ -146,7 +146,7 @@ struct NotebookEditorView: View {
             containerIndex: containerIndex,
             pageSize: size,
             ruling: session.ruling,
-            insets: session.notebook?.info.textInsets ?? .standard,
+            insets: session.notebook.info.textInsets,
             overlayRevision: session.overlayRevision,
             selectedOverlayID: session.selectedOverlayID
         )

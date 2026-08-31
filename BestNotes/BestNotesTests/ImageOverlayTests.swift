@@ -45,7 +45,7 @@ final class ImageOverlayTests: TemporaryDirectoryTestCase {
 
     func testBildIstImExportSichtbar() throws {
         let (package, session) = try makeSession()
-        let engine = try XCTUnwrap(session.textEngine)
+        let engine = session.textEngine
 
         let empty = try NotebookRenderer.flattened(package, engine: engine)
         XCTAssertEqual(TestSupport.inkPixelCount(in: empty), 0)

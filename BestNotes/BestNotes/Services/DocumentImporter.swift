@@ -32,34 +32,37 @@ enum DocumentImportError: LocalizedError {
 @MainActor
 enum DocumentImporter {
 
-    /// Kopiert eine gewaehlte PDF in die Bibliothek.
+    /// Nimmt eine gewaehlte PDF in die Bibliothek auf — als Notizbuch.
     ///
-    /// Bewusst kopieren statt verknuepfen: die Bibliothek besitzt ihre
+    /// Die Seiten wandern unveraendert in `content.pdf` des Pakets. Dadurch
+    /// gibt es im Programm nur eine Dokumentart: eine importierte PDF laesst
+    /// sich sofort annotieren, um leere Seiten ergaenzen und beschreiben.
+    ///
+    /// Bewusst aufnehmen statt verknuepfen: die Bibliothek besitzt ihre
     /// Dokumente dann selbst. Das erspart security-scoped bookmarks samt
     /// Entitlement, ueberlebt Verschieben und Umbenennen des Originals, und
     /// Annotationen landen in der Kopie statt in der Datei des Nutzers.
-    /// Preis: doppelter Speicherplatz. Ein „verknuepfen statt kopieren“
-    /// liesse sich spaeter mit Bookmarks nachruesten.
     @discardableResult
-    static func importPDF(from source: URL, as id: UUID) throws -> URL {
+    static func importPDF(from source: URL, as id: UUID, title: String) throws -> URL {
         let access = SecurityScopedAccess(url: source)
         defer { access.release() }
 
-        guard PDFDocument(url: source) != nil else {
+        guard let document = PDFDocument(url: source), document.pageCount > 0 else {
             throw DocumentImportError.unreadablePDF(source)
         }
 
-        try NotebookLibraryLocation.ensureLibraryRoot()
-        let destination = NotebookLibraryLocation.pdfURL(for: id)
-
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: source, to: destination)
+            try NotebookLibraryLocation.ensureLibraryRoot()
+            let package = try NotebookPackage.create(
+                id: id,
+                title: title,
+                from: document,
+                sourceName: source.lastPathComponent,
+                at: NotebookLibraryLocation.libraryRoot
+            )
+            return package.url
         } catch {
             throw DocumentImportError.copyFailed(source, underlying: error)
         }
-        return destination
     }
 }

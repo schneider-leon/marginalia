@@ -56,11 +56,10 @@ struct RootView: View {
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
-        // Auf `.automatic` zeichnet macOS den Trennstrich unter der
-        // Titelleiste nur, wenn der Inhalt darunter weggescrollt ist — beim
-        // PDF also, beim frisch geoeffneten Notizbuch nicht. Fest gesetzt
-        // sieht die Leiste in beiden Faellen gleich aus.
-        .configureWindow { $0.titlebarSeparatorStyle = .line }
+        // macOS zieht den Trennstrich unter der Titelleiste nach dem
+        // Scrollzustand des Inhalts — das sah je nach Dokument anders aus.
+        // Wir schalten ihn ab und zeichnen ihn selbst an der Tab-Leiste.
+        .configureWindow { $0.titlebarSeparatorStyle = .none }
         .task { showStartupWarningIfNeeded() }
         // Netz unter der Autosicherung: beim Beenden und beim Wegklicken der
         // App wird noch einmal alles weggeschrieben.
@@ -115,7 +114,7 @@ struct RootView: View {
     @ViewBuilder
     private func content(for tab: DocumentTab) -> some View {
         if let session = tab.session {
-            if session.notebook != nil, session.notebookMode == .write {
+            if session.notebookMode == .write {
                 NotebookEditorView(session: session)
                     .focusedSceneValue(\.documentSession, session)
             } else {
@@ -133,8 +132,7 @@ struct RootView: View {
 
     private func placeholderMessage(for kind: LibraryNode.Kind) -> String {
         switch kind {
-        case .notebook: "Das Notizbuchpaket konnte nicht geoeffnet werden."
-        case .pdf: "Die Datei zu diesem Eintrag fehlt in der Bibliothek."
+        case .notebook, .pdf: "Das Dokument konnte nicht geoeffnet werden."
         case .folder: ""
         }
     }
@@ -223,7 +221,7 @@ struct RootView: View {
             // Die offene Session ist die einzige Schreiberin auf dem Paket;
             // sie zieht den Titel beim naechsten Sichern nach.
             tabs.rename(id: id, to: updated.name)
-        } else if updated.kind == .notebook {
+        } else if updated.kind != .folder {
             library.syncNotebookTitle(id: id, to: updated.name)
         }
     }

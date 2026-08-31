@@ -4,6 +4,7 @@
 //
 
 import AppKit
+import PDFKit
 import XCTest
 @testable import BestNotes
 
@@ -21,8 +22,6 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         let package = try NotebookPackage.create(title: "Vorlesung", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Vorlesung")
 
-        XCTAssertNotNil(session.notebook)
-        XCTAssertNotNil(session.textEngine)
         XCTAssertEqual(session.pageDescriptors.count, 1)
         XCTAssertFalse(session.hasUnsavedChanges)
         XCTAssertEqual(session.notebookMode, .write)
@@ -31,7 +30,7 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
     func testSeitenWachsenBeimTippenNach() throws {
         let package = try NotebookPackage.create(title: "Wachstum", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Wachstum")
-        let engine = try XCTUnwrap(session.textEngine)
+        let engine = session.textEngine
 
         longText(engine)
         XCTAssertTrue(session.hasUnsavedChanges, "Tippen muss als Aenderung zaehlen")
@@ -45,7 +44,7 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
     func testSeiteEinfuegenUndLoeschen() throws {
         let package = try NotebookPackage.create(title: "Seiten", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Seiten")
-        let engine = try XCTUnwrap(session.textEngine)
+        let engine = session.textEngine
 
         session.insertBlankPage(after: 0)
         XCTAssertEqual(session.pageDescriptors.count, 2)
@@ -63,7 +62,7 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
     func testSichernUndNeuOeffnen() throws {
         let package = try NotebookPackage.create(title: "Dauerhaft", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Dauerhaft")
-        longText(try XCTUnwrap(session.textEngine))
+        longText(session.textEngine)
         session.growPagesIfNeeded()
         session.setRuling(.lines)
 
@@ -75,15 +74,15 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
             name: "Dauerhaft"
         )
         XCTAssertEqual(reopened.pageDescriptors.count, session.pageDescriptors.count)
-        XCTAssertEqual(reopened.textEngine?.textStorage.string, session.textEngine?.textStorage.string)
+        XCTAssertEqual(reopened.textEngine.textStorage.string, session.textEngine.textStorage.string)
         XCTAssertEqual(reopened.ruling, .lines)
-        XCTAssertEqual(reopened.textEngine?.overflows, false)
+        XCTAssertFalse(reopened.textEngine.overflows)
     }
 
     func testAutosicherungSchreibtOhneZutun() throws {
         let package = try NotebookPackage.create(title: "Auto", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Auto")
-        longText(try XCTUnwrap(session.textEngine), count: 5)
+        longText(session.textEngine, count: 5)
 
         XCTAssertTrue(session.hasUnsavedChanges)
         XCTAssertTrue(session.saveQuietly())
@@ -94,12 +93,60 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertNotNil(reopened.bodyRTF)
     }
 
+    /// Der Kern der Vereinheitlichung: eine importierte PDF ist ein
+    /// Notizbuch wie jedes andere — beschreibbar, erweiterbar, exportierbar.
+    func testImportiertePDFVerhaeltSichWieEinNotizbuch() throws {
+        let source = try TestSupport.makeSamplePDF(pages: 3, at: workingDirectory.appending(path: "q.pdf"))
+        let document = try XCTUnwrap(PDFDocument(url: source))
+        let package = try NotebookPackage.create(
+            title: "Skript", from: document, sourceName: "q.pdf", at: workingDirectory
+        )
+        let session = DocumentSession(package: package, name: "Skript")
+
+        XCTAssertEqual(session.pageDescriptors.count, 3)
+        XCTAssertTrue(session.pageDescriptors.allSatisfy { $0.kind == .imported })
+        XCTAssertTrue(package.writablePageIndices.isEmpty, "Importierte Seiten tragen keinen Textfluss")
+
+        // Leere Seite anhaengen und beschreiben
+        session.insertBlankPage()
+        XCTAssertEqual(session.pageDescriptors.count, 4)
+        XCTAssertEqual(package.writablePageIndices, [3])
+
+        session.textEngine.textStorage.setAttributedString(NSAttributedString(
+            string: "Eigene Notiz zum Skript.",
+            attributes: NotebookTextEngine.defaultAttributes
+        ))
+
+        // Annotation auf einer importierten Seite
+        let highlight = PDFAnnotation(
+            bounds: CGRect(x: 60, y: 700, width: 200, height: 20),
+            forType: .highlight, withProperties: nil
+        )
+        highlight.color = .systemYellow
+        let page = try XCTUnwrap(package.pdf.page(at: 0))
+        session.addAnnotations([highlight], on: page, actionName: "Markieren")
+
+        try session.save()
+
+        let reopened = DocumentSession(
+            package: try NotebookPackage.read(from: package.url), name: "Skript"
+        )
+        XCTAssertEqual(reopened.pageDescriptors.count, 4)
+        XCTAssertEqual(reopened.textEngine.textStorage.string, "Eigene Notiz zum Skript.")
+        XCTAssertEqual(reopened.document.page(at: 0)?.annotations.count, 1)
+
+        let flattened = try NotebookRenderer.flattened(reopened.notebook, engine: reopened.textEngine)
+        XCTAssertEqual(flattened.pageCount, 4)
+        XCTAssertTrue((flattened.page(at: 0)?.string ?? "").contains("Testseite 1"), "Originalseite bleibt")
+        XCTAssertTrue((flattened.page(at: 3)?.string ?? "").contains("Eigene Notiz"), "Eigener Text kommt mit")
+    }
+
     func testEingefuegteSeiteNimmtAmTextflussTeil() throws {
         // Eine Seite mitten im Fluss kann nicht leer bleiben — der Text
         // rueckt nach, wie beim Einfuegen einer Seite in einer Textverarbeitung.
         let package = try NotebookPackage.create(title: "Fluss", at: workingDirectory)
         let session = DocumentSession(package: package, name: "Fluss")
-        let engine = try XCTUnwrap(session.textEngine)
+        let engine = session.textEngine
         longText(engine)
         session.growPagesIfNeeded()
         session.insertBlankPage(after: 0)

@@ -86,7 +86,22 @@ zuverlaessig in Update-Schleifen. Deshalb:
 - Ein `PDFDocument` gehoert immer genau **einer** Session. Beim Tab-Wechsel wird die
   `PDFView` nicht wiederverwendet, damit Zoom-/Scrollzustand pro Tab erhalten bleibt.
 
-### 3. Notizbuch-Datenformat (`.bestnote`)
+### 3. Es gibt nur eine Dokumentart
+
+**Jedes** Dokument in der Bibliothek ist ein `.bestnote`-Paket — auch eine
+importierte PDF. Die wandert beim Import unveraendert in `content.pdf`, ihre
+Seiten bekommen die Art `imported`, und danach verhaelt sie sich wie jedes
+andere Notizbuch: annotieren, leere Seiten anhaengen, beschreiben, exportieren.
+
+Der Grund ist nicht Sparsamkeit, sondern dass alles andere zwei Programme in
+einem Fenster ergibt. Sobald eine PDF *in* einem Notizbuch stecken darf, ist
+die Unterscheidung ohnehin hinfaellig — also gibt es sie gar nicht erst.
+`LibraryNode.Kind` unterscheidet nur noch das Symbol in der Sidebar.
+
+Aeltere Bibliotheken, in denen importierte PDFs als lose Datei lagen, werden
+beim ersten Oeffnen des Eintrags ueberfuehrt (`DocumentStore`).
+
+### 3c. Notizbuch-Datenformat (`.bestnote`)
 
 Ein Notizbuch ist ein **Paket** (Ordner mit `NSFileWrapper`, im Finder als eine Datei
 sichtbar):

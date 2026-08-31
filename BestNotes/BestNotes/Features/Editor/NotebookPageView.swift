@@ -152,8 +152,8 @@ struct NotebookPageView: NSViewRepresentable {
         view.autoresizingMask = []
         configure(view, context: context)
 
-        if let containerIndex, let engine = session.textEngine,
-           engine.containers.indices.contains(containerIndex) {
+        let engine = session.textEngine
+        if let containerIndex, engine.containers.indices.contains(containerIndex) {
             let textView = NSTextView(
                 frame: textFrame(),
                 textContainer: engine.containers[containerIndex]
@@ -216,9 +216,8 @@ struct NotebookPageView: NSViewRepresentable {
         view.page = session.document.page(at: pageIndex)
         view.ruling = containerIndex == nil ? .none : ruling
         view.insets = insets
-        view.lineHeight = session.textEngine.map {
-            $0.layoutManager.defaultLineHeight(for: NotebookTextEngine.defaultFont)
-        } ?? 16
+        view.lineHeight = session.textEngine.layoutManager
+            .defaultLineHeight(for: NotebookTextEngine.defaultFont)
     }
 
     private func textFrame() -> CGRect {

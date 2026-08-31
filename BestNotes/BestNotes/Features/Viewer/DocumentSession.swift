@@ -64,14 +64,6 @@ enum PageDisplayMode: String, CaseIterable, Identifiable {
 
 // MARK: - Fehler
 
-/// Woher der Inhalt einer Session stammt und wohin gesichert wird.
-enum DocumentBacking {
-    /// Eigenstaendige PDF in der Bibliothek.
-    case pdfFile(URL)
-    /// Notizbuch — gesichert wird ins Paket, nicht in eine lose PDF.
-    case notebook(NotebookPackage)
-}
-
 enum DocumentSessionError: LocalizedError {
     case unreadablePDF(URL)
 
@@ -122,7 +114,9 @@ struct PendingComment: Identifiable {
 @Observable
 final class DocumentSession: Identifiable {
     let id = UUID()
-    let backing: DocumentBacking
+    /// Jedes offene Dokument ist ein Notizbuchpaket — auch eine importierte
+    /// PDF. Dadurch gibt es keinen zweiten Weg durch die App.
+    let notebook: NotebookPackage
     let document: PDFDocument
 
     /// Der Name aus der Bibliothek — dort ist er massgeblich, `info.json`
@@ -163,7 +157,7 @@ final class DocumentSession: Identifiable {
     var notebookMode: NotebookMode = .write
 
     @ObservationIgnored
-    private(set) var textEngine: NotebookTextEngine?
+    let textEngine: NotebookTextEngine
 
     /// Zuletzt bearbeitete Textansicht — die Formatierbefehle brauchen deren
     /// Auswahl.
@@ -208,16 +202,7 @@ final class DocumentSession: Identifiable {
     /// selbst ist nicht observierbar.
     private(set) var editRevision = 0
 
-    var url: URL {
-        switch backing {
-        case .pdfFile(let url): url
-        case .notebook(let package): package.url
-        }
-    }
-
-    var notebook: NotebookPackage? {
-        if case .notebook(let package) = backing { package } else { nil }
-    }
+    var url: URL { notebook.url }
 
     var pageCount: Int { document.pageCount }
     var canGoToNextPage: Bool { currentPageIndex + 1 < pageCount }
@@ -225,28 +210,18 @@ final class DocumentSession: Identifiable {
     var canUndo: Bool { _ = editRevision; return undoManager.canUndo }
     var canRedo: Bool { _ = editRevision; return undoManager.canRedo }
 
-    init(pdfAt url: URL, name: String) throws {
-        guard let document = PDFDocument(url: url) else {
-            throw DocumentSessionError.unreadablePDF(url)
-        }
-        self.backing = .pdfFile(url)
-        self.document = document
-        self.displayName = name
-        undoManager.levelsOfUndo = 100
-    }
-
     init(package: NotebookPackage, name: String) {
-        self.backing = .notebook(package)
+        self.notebook = package
         self.document = package.pdf
         self.displayName = name
-        undoManager.levelsOfUndo = 100
-
-        loadWarnings = package.loadWarnings
-        package.pruneUnreferencedAssets()
 
         let engine = NotebookTextEngine(rtf: package.bodyRTF)
         engine.updateContainers(sizes: package.textAreaSizes())
-        textEngine = engine
+        self.textEngine = engine
+
+        undoManager.levelsOfUndo = 100
+        loadWarnings = package.loadWarnings
+        package.pruneUnreferencedAssets()
         pageDescriptors = package.info.pages
         ruling = package.info.ruling
         engine.onEdited = { [weak self] in self?.textDidChange() }
@@ -256,7 +231,8 @@ final class DocumentSession: Identifiable {
 
     /// Container an die Seiten angleichen und die Seitenliste spiegeln.
     private func syncNotebookState() {
-        guard let package = notebook, let engine = textEngine else { return }
+        let package = notebook
+        let engine = textEngine
         engine.updateContainers(sizes: package.textAreaSizes())
         pageDescriptors = package.info.pages
     }
@@ -275,7 +251,8 @@ final class DocumentSession: Identifiable {
     /// wird *nicht* automatisch geloescht — eine Seite, die der Nutzer
     /// angelegt hat, verschwindet nicht von selbst.
     func growPagesIfNeeded() {
-        guard let package = notebook, let engine = textEngine else { return }
+        let package = notebook
+        let engine = textEngine
         var added = 0
         while engine.overflows, added < 200 {
             guard (try? package.insertBlankPage()) != nil else { break }
@@ -290,7 +267,7 @@ final class DocumentSession: Identifiable {
     }
 
     func insertBlankPage(after index: Int? = nil) {
-        guard let package = notebook else { return }
+        let package = notebook
         let position = index.map { $0 + 1 } ?? package.info.pages.count
         try? package.insertBlankPage(at: position)
         syncNotebookState()
@@ -300,7 +277,8 @@ final class DocumentSession: Identifiable {
     }
 
     func removePage(at index: Int) {
-        guard let package = notebook, package.info.pages.count > 1 else { return }
+        guard notebook.info.pages.count > 1 else { return }
+        let package = notebook
         package.removePage(at: index)
         syncNotebookState()
         hasUnsavedChanges = true
@@ -309,7 +287,8 @@ final class DocumentSession: Identifiable {
     }
 
     func setRuling(_ value: PageRuling) {
-        guard let package = notebook, value != ruling else { return }
+        guard value != ruling else { return }
+        let package = notebook
         ruling = value
         package.setRuling(value)
         hasUnsavedChanges = true
@@ -320,7 +299,7 @@ final class DocumentSession: Identifiable {
 
     func image(forAsset name: String) -> NSImage? {
         if let cached = imageCache[name] { return cached }
-        guard let data = notebook?.assetData(named: name), let image = NSImage(data: data) else {
+        guard let data = notebook.assetData(named: name), let image = NSImage(data: data) else {
             return nil
         }
         imageCache[name] = image
@@ -328,7 +307,7 @@ final class DocumentSession: Identifiable {
     }
 
     func imageOverlays(atPageIndex index: Int) -> [Overlay] {
-        notebook?.imageOverlays(atPageIndex: index) ?? []
+        notebook.imageOverlays(atPageIndex: index)
     }
 
     @discardableResult
@@ -342,8 +321,8 @@ final class DocumentSession: Identifiable {
 
     @discardableResult
     func insertImage(data: Data, fileExtension: String, atPageIndex index: Int) -> UUID? {
-        guard let package = notebook,
-              let pageID = package.pageID(at: index),
+        let package = notebook
+        guard let pageID = package.pageID(at: index),
               let image = NSImage(data: data),
               image.size.width > 0, image.size.height > 0
         else { return nil }
@@ -378,7 +357,7 @@ final class DocumentSession: Identifiable {
     }
 
     func addOverlay(_ overlay: Overlay, pageID: UUID, actionName: String) {
-        guard let package = notebook else { return }
+        let package = notebook
         package.overlays[pageID] = package.overlays[pageID] + [overlay]
         undoManager.setActionName(actionName)
         undoManager.registerUndo(withTarget: self) { session in
@@ -388,9 +367,8 @@ final class DocumentSession: Identifiable {
     }
 
     func removeOverlay(id: UUID, pageID: UUID, actionName: String = "Bild entfernen") {
-        guard let package = notebook,
-              let existing = package.overlays[pageID].first(where: { $0.id == id })
-        else { return }
+        let package = notebook
+        guard let existing = package.overlays[pageID].first(where: { $0.id == id }) else { return }
         package.overlays[pageID] = package.overlays[pageID].filter { $0.id != id }
         undoManager.setActionName(actionName)
         undoManager.registerUndo(withTarget: self) { session in
@@ -401,13 +379,14 @@ final class DocumentSession: Identifiable {
     }
 
     func removeSelectedOverlay(atPageIndex index: Int) {
-        guard let id = selectedOverlayID, let pageID = notebook?.pageID(at: index) else { return }
+        guard let id = selectedOverlayID, let pageID = notebook.pageID(at: index) else { return }
         removeOverlay(id: id, pageID: pageID)
     }
 
     /// Waehrend des Ziehens: nur setzen, kein Undo-Schritt pro Mausbewegung.
     func previewOverlayFrame(id: UUID, frame: CGRect, atPageIndex index: Int) {
-        guard let package = notebook, let pageID = package.pageID(at: index) else { return }
+        let package = notebook
+        guard let pageID = package.pageID(at: index) else { return }
         var list = package.overlays[pageID]
         guard let position = list.firstIndex(where: { $0.id == id }) else { return }
         list[position].frame = frame
@@ -417,7 +396,7 @@ final class DocumentSession: Identifiable {
 
     /// Nach dem Loslassen: ein Undo-Schritt fuer die gesamte Bewegung.
     func commitOverlayFrame(id: UUID, from oldFrame: CGRect, to newFrame: CGRect, atPageIndex index: Int) {
-        guard oldFrame != newFrame, let pageID = notebook?.pageID(at: index) else { return }
+        guard oldFrame != newFrame, notebook.pageID(at: index) != nil else { return }
         previewOverlayFrame(id: id, frame: newFrame, atPageIndex: index)
         undoManager.setActionName("Bild bewegen")
         undoManager.registerUndo(withTarget: self) { session in
@@ -438,15 +417,15 @@ final class DocumentSession: Identifiable {
     }
 
     func toggleBold() {
-        textEngine?.toggleTrait(.boldFontMask, in: selectedTextRange)
+        textEngine.toggleTrait(.boldFontMask, in: selectedTextRange)
     }
 
     func toggleItalic() {
-        textEngine?.toggleTrait(.italicFontMask, in: selectedTextRange)
+        textEngine.toggleTrait(.italicFontMask, in: selectedTextRange)
     }
 
     func setFontSize(_ size: CGFloat) {
-        textEngine?.setFontSize(size, in: selectedTextRange)
+        textEngine.setFontSize(size, in: selectedTextRange)
     }
 
     func close() {
@@ -500,7 +479,7 @@ final class DocumentSession: Identifiable {
     // MARK: Zoom — je nach Modus die PDFView oder der Editor
 
     /// Ob gerade getippt wird. Entscheidet, wohin Zoombefehle gehen.
-    var isTextEditing: Bool { notebook != nil && notebookMode == .write }
+    var isTextEditing: Bool { notebookMode == .write }
 
     var currentScale: CGFloat { isTextEditing ? editorZoom : scaleFactor }
 
@@ -597,6 +576,9 @@ final class DocumentSession: Identifiable {
     }
 
     private func didEdit() {
+        // Nur Annotationen stecken in content.pdf. Text und Bilder liegen
+        // daneben — die brauchen kein Neuschreiben der Seiten.
+        notebook.markPDFDirty()
         hasUnsavedChanges = true
         editRevision &+= 1
         commandTarget?.refreshDisplay()
@@ -654,25 +636,17 @@ final class DocumentSession: Identifiable {
 
     // MARK: Speichern & Export
 
-    /// Was exportiert wird: bei Notizbuechern die flachgerechnete Fassung,
-    /// in der getippter Text und Hilfslinien in der Seite stecken.
+    /// Exportiert wird die flachgerechnete Fassung: getippter Text, Bilder
+    /// und Hilfslinien stecken danach in der Seite.
     private func exportDocument() throws -> PDFDocument {
-        guard let package = notebook, let engine = textEngine else { return document }
-        package.setBodyRTF(engine.rtfData())
-        return try NotebookRenderer.flattened(package, engine: engine)
+        notebook.setBodyRTF(textEngine.rtfData())
+        return try NotebookRenderer.flattened(notebook, engine: textEngine)
     }
 
-    /// Schreibt zurueck — in die PDF-Datei oder ins Notizbuchpaket.
     func save() throws {
-        switch backing {
-        case .pdfFile(let url):
-            try PDFExportService.write(document, to: url)
-        case .notebook(let package):
-            package.setTitle(displayName)
-            package.setBodyRTF(textEngine?.rtfData())
-            package.markPDFDirty()
-            try package.write()
-        }
+        notebook.setTitle(displayName)
+        notebook.setBodyRTF(textEngine.rtfData())
+        try notebook.write()
         hasUnsavedChanges = false
     }
 

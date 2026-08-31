@@ -54,16 +54,46 @@ final class LibraryStoreTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(store.node(id: notebook)?.documentURL, packageURL)
     }
 
-    func testImportKopiertUndLaesstDasOriginalInRuhe() throws {
-        let source = try TestSupport.makeSamplePDF(at: workingDirectory.appending(path: "quelle.pdf"))
+    /// Eine importierte PDF wird zum Notizbuch — es gibt im Programm nur
+    /// eine Dokumentart.
+    func testImportLegtEinNotizbuchAnUndLaesstDasOriginalInRuhe() throws {
+        let source = try TestSupport.makeSamplePDF(pages: 3, at: workingDirectory.appending(path: "quelle.pdf"))
         let originalSize = try FileManager.default.attributesOfItem(atPath: source.path)[.size] as? Int
 
         let entry = try store.importPDF(from: source, name: "Skript", in: nil)
-        let copy = NotebookLibraryLocation.pdfURL(for: entry)
+        let packageURL = NotebookLibraryLocation.packageURL(for: entry)
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
-        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: copy.path)[.size] as? Int, originalSize)
-        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: source.path)[.size] as? Int, originalSize)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: packageURL.path))
+        XCTAssertEqual(store.node(id: entry)?.documentURL, packageURL)
+
+        let package = try NotebookPackage.read(from: packageURL)
+        XCTAssertEqual(package.pageCount, 3)
+        XCTAssertEqual(package.info.pages.allSatisfy { $0.kind == .imported }, true)
+        XCTAssertEqual(package.info.pages.first?.source, "quelle.pdf")
+        XCTAssertEqual(package.title, "Skript")
+
+        XCTAssertEqual(
+            try FileManager.default.attributesOfItem(atPath: source.path)[.size] as? Int,
+            originalSize,
+            "Das Original darf nicht angefasst werden"
+        )
+    }
+
+    /// Aeltere Bibliotheken hatten importierte PDFs als lose Datei.
+    func testLoseLiegendePDFWirdBeimOeffnenUeberfuehrt() throws {
+        let entry = LibraryEntry(name: "Alt", kind: .pdf)
+        container.mainContext.insert(entry)
+        try container.mainContext.save()
+        store.reload()
+
+        try FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
+        let legacy = NotebookLibraryLocation.legacyPDFURL(for: entry.id)
+        try TestSupport.makeSamplePDF(pages: 2, at: legacy)
+
+        let package = try DocumentStore.openPackage(id: entry.id, title: "Alt")
+        XCTAssertEqual(package.pageCount, 2)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: package.url.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path), "Die lose Datei bleibt nicht liegen")
     }
 
     func testBreadcrumbUndEinfuegeziel() throws {
@@ -120,7 +150,7 @@ final class LibraryStoreTests: TemporaryDirectoryTestCase {
         let pdf = try store.importPDF(from: source, name: "Skript", in: analysis)
 
         let packageURL = NotebookLibraryLocation.packageURL(for: notebook)
-        let pdfURL = NotebookLibraryLocation.pdfURL(for: pdf)
+        let pdfURL = NotebookLibraryLocation.packageURL(for: pdf)
 
         let removed = store.delete(id: studium)
         XCTAssertEqual(removed.count, 4)

@@ -34,7 +34,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
         view.pageShadowsEnabled = true
-        view.backgroundColor = .underPageBackgroundColor
+        view.backgroundColor = .documentBackground
         view.autoScales = true
         context.coordinator.attach(to: view)
         return view

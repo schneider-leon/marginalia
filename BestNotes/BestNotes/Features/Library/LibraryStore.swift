@@ -159,7 +159,7 @@ final class LibraryStore {
         context.insert(entry)
 
         do {
-            try DocumentImporter.importPDF(from: source, as: entry.id)
+            try DocumentImporter.importPDF(from: source, as: entry.id, title: name)
         } catch {
             context.delete(entry)
             commit()
@@ -182,11 +182,11 @@ final class LibraryStore {
 
     /// Zieht den Titel in `info.json` nach.
     ///
-    /// Nur aufrufen, wenn das Notizbuch *nicht* offen ist — sonst schreiben
+    /// Nur aufrufen, wenn das Dokument *nicht* offen ist — sonst schreiben
     /// zwei `NotebookPackage`-Instanzen auf dieselbe Datei. Ist es offen,
     /// erledigt das die Session beim naechsten Sichern.
     func syncNotebookTitle(id: UUID, to name: String) {
-        guard let entry = entry(id: id), entry.kind == .notebook,
+        guard let entry = entry(id: id), entry.kind != .folder,
               let url = entry.documentURL,
               let package = try? NotebookPackage.read(from: url)
         else { return }
