@@ -56,6 +56,11 @@ struct RootView: View {
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
+        // Auf `.automatic` zeichnet macOS den Trennstrich unter der
+        // Titelleiste nur, wenn der Inhalt darunter weggescrollt ist — beim
+        // PDF also, beim frisch geoeffneten Notizbuch nicht. Fest gesetzt
+        // sieht die Leiste in beiden Faellen gleich aus.
+        .configureWindow { $0.titlebarSeparatorStyle = .line }
         .task { showStartupWarningIfNeeded() }
         // Netz unter der Autosicherung: beim Beenden und beim Wegklicken der
         // App wird noch einmal alles weggeschrieben.
