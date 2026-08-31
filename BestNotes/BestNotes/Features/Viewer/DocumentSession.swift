@@ -427,15 +427,45 @@ final class DocumentSession: Identifiable {
     }
 
     func toggleBold() {
-        textEngine.toggleTrait(.boldFontMask, in: selectedTextRange)
+        applyTrait(.boldFontMask)
     }
 
     func toggleItalic() {
-        textEngine.toggleTrait(.italicFontMask, in: selectedTextRange)
+        applyTrait(.italicFontMask)
     }
 
     func setFontSize(_ size: CGFloat) {
-        textEngine.setFontSize(size, in: selectedTextRange)
+        let range = selectedTextRange
+        if range.length > 0 {
+            textEngine.setFontSize(size, in: range)
+        } else {
+            changeTypingFont { NSFontManager.shared.convert($0, toSize: size) }
+        }
+    }
+
+    /// Mit Auswahl wird der vorhandene Text geaendert, ohne Auswahl das, was
+    /// als Naechstes getippt wird. Ohne den zweiten Fall liesse sich fett nur
+    /// nachtraeglich setzen, nicht vorher einschalten.
+    private func applyTrait(_ trait: NSFontTraitMask) {
+        let range = selectedTextRange
+        if range.length > 0 {
+            textEngine.toggleTrait(trait, in: range)
+            return
+        }
+        changeTypingFont { font in
+            let manager = NSFontManager.shared
+            return manager.traits(of: font).contains(trait)
+                ? manager.convert(font, toNotHaveTrait: trait)
+                : manager.convert(font, toHaveTrait: trait)
+        }
+    }
+
+    private func changeTypingFont(_ transform: (NSFont) -> NSFont) {
+        guard let view = activeTextView else { return }
+        var attributes = view.typingAttributes
+        let font = (attributes[.font] as? NSFont) ?? NotebookTextEngine.defaultFont
+        attributes[.font] = transform(font)
+        view.typingAttributes = attributes
     }
 
     func close() {

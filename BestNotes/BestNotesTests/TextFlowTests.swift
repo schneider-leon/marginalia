@@ -82,6 +82,48 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         XCTAssertTrue(engine.overflows, "Der Text muss ueber die letzte Seite hinauslaufen")
     }
 
+    /// Ohne Auswahl muss der Umschalter das *naechste* Getippte betreffen —
+    /// sonst laesst sich fett nur nachtraeglich setzen.
+    func testFettUndKursivOhneAuswahlWirkenAufsWeitereTippen() throws {
+        let package = try NotebookPackage.create(title: "Format", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Format")
+        let engine = session.textEngine
+
+        let field = NSTextView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 400),
+            textContainer: engine.containers[0]
+        )
+        field.typingAttributes = NotebookTextEngine.defaultAttributes
+        session.activeTextView = field
+        XCTAssertEqual(session.selectedTextRange.length, 0)
+
+        session.toggleBold()
+        var font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+
+        session.toggleItalic()
+        font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.italicFontMask))
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask), "Fett darf dabei nicht abfallen")
+
+        session.setFontSize(24)
+        font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
+        XCTAssertEqual(font.pointSize, 24)
+
+        session.toggleBold()
+        font = try XCTUnwrap(field.typingAttributes[.font] as? NSFont)
+        XCTAssertFalse(NSFontManager.shared.traits(of: font).contains(.boldFontMask), "Erneutes Umschalten nimmt es zurueck")
+
+        // Mit Auswahl geht es weiterhin an den vorhandenen Text
+        engine.textStorage.setAttributedString(NSAttributedString(
+            string: "Vorhandener Text", attributes: NotebookTextEngine.defaultAttributes
+        ))
+        field.setSelectedRange(NSRange(location: 0, length: 5))
+        session.toggleBold()
+        let applied = try XCTUnwrap(engine.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertTrue(NSFontManager.shared.traits(of: applied).contains(.boldFontMask))
+    }
+
     func testTextUndFormatUeberlebenDasSichern() throws {
         let package = try NotebookPackage.create(title: "RTF", at: workingDirectory)
         let engine = filledEngine(package, repeating: 5)

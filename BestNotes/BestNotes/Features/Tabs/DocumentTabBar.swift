@@ -53,10 +53,10 @@ struct DocumentTabBar: View {
 
         return Image(systemName: "house")
             .imageScale(.medium)
-            .foregroundStyle(isActive ? .primary : .secondary)
+            .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             .frame(width: 44)
             .frame(height: Self.barHeight)
-            .background(isActive ? AnyShapeStyle(.selection.opacity(0.35)) : AnyShapeStyle(.clear))
+            .background(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear))
             .overlay(alignment: .trailing) { Divider() }
             .contentShape(.rect)
             .onTapGesture { store.activateHome() }
@@ -69,21 +69,22 @@ struct DocumentTabBar: View {
 
         return HStack(spacing: 6) {
             Image(systemName: tab.symbol)
-                .foregroundStyle(isActive ? .primary : .secondary)
+                .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .imageScale(.small)
 
             Text(tab.title)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .font(.callout)
-                .foregroundStyle(isActive ? .primary : .secondary)
+                .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
 
             closeControl(for: tab, revealed: isActive || isHovered)
         }
         .padding(.horizontal, 10)
         .frame(minWidth: 120, maxWidth: 200)
         .frame(height: Self.barHeight)
-        .background(isActive ? AnyShapeStyle(.selection.opacity(0.35)) : AnyShapeStyle(.clear))
+        // Wie beim Modusumschalter: die aktive Auswahl ist blau hinterlegt.
+        .background(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear))
         .overlay(alignment: .trailing) {
             Divider()
         }
@@ -116,6 +117,7 @@ struct DocumentTabBar: View {
                     .frame(width: 14, height: 14)
             }
             .buttonStyle(.borderless)
+            .foregroundStyle(tab.id == store.activeID ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             .help("Tab schliessen")
         } else if tab.hasUnsavedChanges {
             Circle()
