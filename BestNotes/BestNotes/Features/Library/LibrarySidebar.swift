@@ -29,18 +29,28 @@ struct LibrarySidebar: View {
         .listStyle(.sidebar)
         .overlay {
             if store.roots.isEmpty {
+                // Ohne die Fussleiste ist das „+“ oben nicht mehr in
+                // Blickweite — der leere Zustand bietet den Weg selbst an.
                 ContentUnavailableView {
                     Label("Bibliothek ist leer", systemImage: "books.vertical")
                 } description: {
                     Text("Lege ein Notizbuch an oder importiere eine PDF.")
+                } actions: {
+                    Button("Notizbuch anlegen") { addNotebook(into: nil) }
+                        .buttonStyle(.borderedProminent)
+                    Button("PDF importieren …") { onImportPDF(nil) }
                 }
             }
         }
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomBar
+        .toolbar {
+            // Sitzt dadurch direkt neben dem Umschalter fuer die Bibliothek,
+            // statt eine eigene Leiste am unteren Rand zu brauchen.
+            ToolbarItem(placement: .navigation) {
+                addMenu
+            }
         }
         .alert("Umbenennen", isPresented: renamingBinding) {
             TextField("Name", text: renameTextBinding)
@@ -69,28 +79,18 @@ struct LibrarySidebar: View {
         }
     }
 
-    // MARK: - Fussleiste
+    // MARK: - Hinzufuegen
 
-    private var bottomBar: some View {
-        HStack(spacing: 2) {
-            Menu {
-                Button("Neuer Ordner") { addFolder(into: store.insertionTarget(for: selection)) }
-                Button("Neues Notizbuch") { addNotebook(into: store.insertionTarget(for: selection)) }
-                Button("PDF importieren …") { onImportPDF(store.insertionTarget(for: selection)) }
-            } label: {
-                Label("Hinzufuegen", systemImage: "plus")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-
-            Spacer()
+    private var addMenu: some View {
+        Menu {
+            Button("Neuer Ordner") { addFolder(into: store.insertionTarget(for: selection)) }
+            Button("Neues Notizbuch") { addNotebook(into: store.insertionTarget(for: selection)) }
+            Divider()
+            Button("PDF importieren …") { onImportPDF(store.insertionTarget(for: selection)) }
+        } label: {
+            Label("Hinzufuegen", systemImage: "plus")
         }
-        .labelStyle(.iconOnly)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .help("Ordner, Notizbuch oder PDF hinzufuegen")
     }
 
     // MARK: - Aktionen
