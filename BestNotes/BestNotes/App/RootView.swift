@@ -35,7 +35,6 @@ struct RootView: View {
                 onCreateFolder: createFolder(in:),
                 onCreateNotebook: createNotebook(in:),
                 onImportPDF: presentImporter(into:),
-                onToggleSidebar: toggleSidebar,
                 onRename: rename(id:to:),
                 onDelete: delete(id:)
             )
@@ -55,7 +54,6 @@ struct RootView: View {
             onCompletion: handleImport
         )
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
-        .focusedSceneValue(\.toggleSidebarAction, toggleSidebar)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
         .task { showStartupWarningIfNeeded() }
@@ -153,12 +151,6 @@ struct RootView: View {
     private func syncSelectionToActiveTab() {
         guard let activeID = tabs.activeID, selection != activeID else { return }
         selection = activeID
-    }
-
-    private func toggleSidebar() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
-        }
     }
 
     // MARK: - Import

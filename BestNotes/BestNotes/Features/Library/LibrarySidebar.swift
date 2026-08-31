@@ -12,7 +12,6 @@ struct LibrarySidebar: View {
     let onCreateFolder: (UUID?) -> UUID?
     let onCreateNotebook: (UUID?) -> UUID?
     let onImportPDF: (UUID?) -> Void
-    let onToggleSidebar: () -> Void
     let onRename: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
 
@@ -30,8 +29,8 @@ struct LibrarySidebar: View {
         .listStyle(.sidebar)
         .overlay {
             if store.roots.isEmpty {
-                // Doppelt zum „+“ darueber, aber beim ersten Start ist ein
-                // benannter Knopf der klarere Einstieg.
+                // Ohne die Fussleiste ist das „+“ oben nicht mehr in
+                // Blickweite — der leere Zustand bietet den Weg selbst an.
                 ContentUnavailableView {
                     Label("Bibliothek ist leer", systemImage: "books.vertical")
                 } description: {
@@ -46,13 +45,12 @@ struct LibrarySidebar: View {
         .contextMenu(forSelectionType: UUID.self) { ids in
             contextMenu(for: ids.first)
         }
-        // Beide Knoepfe gehoeren in die Sidebar selbst, nicht in die
-        // Fensterleiste: dort entscheidet SwiftUI, ob ein Element ueber der
-        // Sidebar oder ueber dem Dokument landet — und das war nicht die
-        // Sidebar. Als Zeile im Inhalt steht die Reihenfolge fest.
-        .toolbar(removing: .sidebarToggle)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            sidebarHeader
+        .toolbar {
+            // Sitzt dadurch direkt neben dem Umschalter fuer die Bibliothek,
+            // statt eine eigene Leiste am unteren Rand zu brauchen.
+            ToolbarItem(placement: .navigation) {
+                addMenu
+            }
         }
         .alert("Umbenennen", isPresented: renamingBinding) {
             TextField("Name", text: renameTextBinding)
@@ -81,23 +79,7 @@ struct LibrarySidebar: View {
         }
     }
 
-    // MARK: - Kopfzeile
-
-    private var sidebarHeader: some View {
-        HStack(spacing: 2) {
-            addMenu
-            sidebarToggle
-            Spacer(minLength: 0)
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
-    }
+    // MARK: - Hinzufuegen
 
     private var addMenu: some View {
         Menu {
@@ -109,14 +91,6 @@ struct LibrarySidebar: View {
             Label("Hinzufuegen", systemImage: "plus")
         }
         .help("Ordner, Notizbuch oder PDF hinzufuegen")
-        .fixedSize()
-    }
-
-    private var sidebarToggle: some View {
-        Button(action: onToggleSidebar) {
-            Label("Bibliothek", systemImage: "sidebar.leading")
-        }
-        .help("Bibliothek ein- oder ausblenden")
     }
 
     // MARK: - Aktionen
