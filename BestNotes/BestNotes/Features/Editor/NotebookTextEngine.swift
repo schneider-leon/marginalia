@@ -196,6 +196,29 @@ final class NotebookTextEngine: NSObject, NSTextStorageDelegate {
         textStorage.endEditing()
     }
 
+    /// Unterstreichen ist kein Merkmal der Schrift, sondern ein eigenes
+    /// Attribut — deshalb ein eigener Weg statt `NSFontTraitMask`.
+    func toggleUnderline(in range: NSRange) {
+        guard range.length > 0 else { return }
+        var allSet = true
+
+        textStorage.enumerateAttribute(.underlineStyle, in: range) { value, _, _ in
+            if (value as? Int ?? 0) == 0 { allSet = false }
+        }
+
+        textStorage.beginEditing()
+        if allSet {
+            textStorage.removeAttribute(.underlineStyle, range: range)
+        } else {
+            textStorage.addAttribute(
+                .underlineStyle,
+                value: NSUnderlineStyle.single.rawValue,
+                range: range
+            )
+        }
+        textStorage.endEditing()
+    }
+
     func setFontSize(_ size: CGFloat, in range: NSRange) {
         guard range.length > 0 else { return }
         textStorage.beginEditing()

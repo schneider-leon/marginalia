@@ -122,6 +122,18 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         XCTAssertFalse(session.isBoldActive)
         XCTAssertTrue(session.isItalicActive, "Kursiv bleibt davon unberuehrt")
 
+        // Unterstreichen ist ein eigenes Attribut, kein Schriftmerkmal
+        XCTAssertFalse(session.isUnderlineActive)
+        session.toggleUnderline()
+        XCTAssertTrue(session.isUnderlineActive)
+        XCTAssertEqual(
+            field.typingAttributes[.underlineStyle] as? Int,
+            NSUnderlineStyle.single.rawValue
+        )
+        session.toggleUnderline()
+        XCTAssertFalse(session.isUnderlineActive)
+        XCTAssertNil(field.typingAttributes[.underlineStyle])
+
         // Mit Auswahl geht es weiterhin an den vorhandenen Text
         engine.textStorage.setAttributedString(NSAttributedString(
             string: "Vorhandener Text", attributes: NotebookTextEngine.defaultAttributes
@@ -131,12 +143,20 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         let applied = try XCTUnwrap(engine.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
         XCTAssertTrue(NSFontManager.shared.traits(of: applied).contains(.boldFontMask))
         XCTAssertTrue(session.isBoldActive, "Bei Auswahl zeigt der Knopf den Zustand des Texts")
+
+        session.toggleUnderline()
+        XCTAssertEqual(
+            engine.textStorage.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int,
+            NSUnderlineStyle.single.rawValue
+        )
+        XCTAssertTrue(session.isUnderlineActive)
     }
 
     func testTextUndFormatUeberlebenDasSichern() throws {
         let package = try NotebookPackage.create(title: "RTF", at: workingDirectory)
         let engine = filledEngine(package, repeating: 5)
         engine.toggleTrait(.boldFontMask, in: NSRange(location: 0, length: 10))
+        engine.toggleUnderline(in: NSRange(location: 0, length: 10))
         package.setBodyRTF(engine.rtfData())
         try package.write()
 
@@ -148,6 +168,10 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
 
         let font = try XCTUnwrap(restored.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
         XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+        XCTAssertNotEqual(
+            restored.textStorage.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int, 0,
+            "Unterstreichung muss den RTF-Weg ueberstehen"
+        )
     }
 
     func testTextWirdAlsEchterTextExportiert() throws {

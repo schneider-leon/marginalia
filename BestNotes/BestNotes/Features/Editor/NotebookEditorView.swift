@@ -222,8 +222,7 @@ struct NotebookEditorView: View {
 
             Divider().frame(height: 18)
 
-            formatToggle("Fett", symbol: "bold", isOn: session.isBoldActive, action: session.toggleBold)
-            formatToggle("Kursiv", symbol: "italic", isOn: session.isItalicActive, action: session.toggleItalic)
+            formatGroup
 
             Menu {
                 ForEach([9, 10, 11, 12, 13, 14, 18, 24, 36], id: \.self) { size in
@@ -260,6 +259,21 @@ struct NotebookEditorView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Optik des Werkzeugwaehlers im Annotationsmodus: eine zusammenhaengende
+    /// helle Box, darin die aktiven Eigenschaften blau.
+    private var formatGroup: some View {
+        HStack(spacing: 2) {
+            formatToggle("Fett", symbol: "bold", isOn: session.isBoldActive, action: session.toggleBold)
+            formatToggle("Kursiv", symbol: "italic", isOn: session.isItalicActive, action: session.toggleItalic)
+            formatToggle(
+                "Unterstrichen", symbol: "underline",
+                isOn: session.isUnderlineActive, action: session.toggleUnderline
+            )
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7).fill(.quaternary))
     }
 
     /// Zeigt an, ob die Eigenschaft gerade gilt — blau hinterlegt wie die

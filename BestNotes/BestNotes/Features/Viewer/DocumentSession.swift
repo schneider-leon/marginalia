@@ -455,6 +455,18 @@ final class DocumentSession: Identifiable {
         return NSFontManager.shared.traits(of: currentFont).contains(.italicFontMask)
     }
 
+    var isUnderlineActive: Bool {
+        _ = formattingRevision
+        let range = selectedTextRange
+        if range.length > 0, range.location < textEngine.textStorage.length {
+            let value = textEngine.textStorage.attribute(
+                .underlineStyle, at: range.location, effectiveRange: nil
+            ) as? Int
+            return (value ?? 0) != 0
+        }
+        return (activeTextView?.typingAttributes[.underlineStyle] as? Int ?? 0) != 0
+    }
+
     var currentFontSize: CGFloat {
         _ = formattingRevision
         return currentFont.pointSize
@@ -471,6 +483,24 @@ final class DocumentSession: Identifiable {
 
     func toggleItalic() {
         applyTrait(.italicFontMask)
+    }
+
+    func toggleUnderline() {
+        let range = selectedTextRange
+        defer { formattingRevision &+= 1 }
+
+        if range.length > 0 {
+            textEngine.toggleUnderline(in: range)
+            return
+        }
+        guard let view = activeTextView else { return }
+        var attributes = view.typingAttributes
+        if (attributes[.underlineStyle] as? Int ?? 0) == 0 {
+            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        } else {
+            attributes.removeValue(forKey: .underlineStyle)
+        }
+        view.typingAttributes = attributes
     }
 
     func setFontSize(_ size: CGFloat) {
