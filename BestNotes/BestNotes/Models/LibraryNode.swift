@@ -43,6 +43,8 @@ struct LibraryNode: Identifiable, Hashable {
     /// Datei in der Bibliothek — `nil` bei Ordnern.
     var documentURL: URL?
 
+    var lastOpenedAt: Date?
+
     var isFolder: Bool { kind == .folder }
     var symbol: String { kind.symbol }
 
@@ -51,13 +53,15 @@ struct LibraryNode: Identifiable, Hashable {
         name: String,
         kind: Kind,
         children: [LibraryNode]? = nil,
-        documentURL: URL? = nil
+        documentURL: URL? = nil,
+        lastOpenedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
         self.kind = kind
         self.children = kind == .folder ? (children ?? []) : children
         self.documentURL = documentURL
+        self.lastOpenedAt = lastOpenedAt
     }
 
     static func folder(_ name: String, _ children: [LibraryNode] = []) -> LibraryNode {

@@ -636,6 +636,7 @@ final class DocumentSession: Identifiable {
         notebook.setTitle(displayName)
         notebook.setBodyRTF(textEngine.rtfData())
         try notebook.write()
+        DocumentThumbnails.shared.invalidate(id: notebook.info.id)
         hasUnsavedChanges = false
     }
 

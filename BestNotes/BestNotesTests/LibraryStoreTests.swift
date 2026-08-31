@@ -124,6 +124,8 @@ final class LibraryStoreTests: TemporaryDirectoryTestCase {
     func testStrukturUeberlebtDenNeustart() throws {
         let studium = store.createFolder(name: "Studium", in: nil)
         let notebook = try store.createNotebook(name: "Mitschrift", in: studium)
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        store.markOpened(id: notebook, at: stamp)
 
         // Erst schliessen, dann neu oeffnen — zwei Container auf derselben
         // Datei sind kein Neustart, sondern zwei Schreiber.
@@ -140,6 +142,30 @@ final class LibraryStoreTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(reopened.roots.count, 1)
         XCTAssertEqual(reopened.node(id: studium)?.children?.count, 1)
         XCTAssertEqual(reopened.node(id: notebook)?.name, "Mitschrift")
+        XCTAssertEqual(reopened.node(id: notebook)?.lastOpenedAt, stamp)
+        XCTAssertEqual(reopened.recentlyOpened().map(\.id), [notebook])
+    }
+
+    func testZuletztGeoeffneteInDerRichtigenReihenfolge() throws {
+        let ordner = store.createFolder(name: "Studium", in: nil)
+        let a = try store.createNotebook(name: "A", in: nil)
+        let b = try store.createNotebook(name: "B", in: ordner)
+        let c = try store.createNotebook(name: "C", in: ordner)
+
+        XCTAssertTrue(store.recentlyOpened().isEmpty, "Ungeoeffnetes taucht nicht auf")
+
+        let now = Date()
+        store.markOpened(id: a, at: now.addingTimeInterval(-300))
+        store.markOpened(id: c, at: now)
+
+        let recents = store.recentlyOpened()
+        XCTAssertEqual(recents.map(\.id), [c, a], "Neueste zuerst, auch ueber Ordnergrenzen hinweg")
+        XCTAssertFalse(recents.contains { $0.id == b }, "Nie geoeffnetes fehlt")
+        XCTAssertFalse(recents.contains { $0.isFolder }, "Ordner sind keine Dokumente")
+
+        store.markOpened(id: b, at: now.addingTimeInterval(60))
+        XCTAssertEqual(store.recentlyOpened().map(\.id), [b, c, a])
+        XCTAssertEqual(store.recentlyOpened(limit: 2).map(\.id), [b, c])
     }
 
     func testLoeschenNimmtNachkommenUndDateienMit() throws {

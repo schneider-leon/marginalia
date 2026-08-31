@@ -51,7 +51,8 @@ final class LibraryStore {
             name: entry.name,
             kind: entry.kind,
             children: entry.kind == .folder ? entry.sortedChildren.map(node(from:)) : nil,
-            documentURL: entry.documentURL
+            documentURL: entry.documentURL,
+            lastOpenedAt: entry.lastOpenedAt
         )
     }
 
@@ -92,6 +93,33 @@ final class LibraryStore {
     func insertionTarget(for selection: UUID?) -> UUID? {
         guard let selection, let node = node(id: selection) else { return nil }
         return node.isFolder ? selection : Self.parentID(of: selection, in: roots)
+    }
+
+    /// Zuletzt geoeffnete Dokumente, neueste zuerst.
+    func recentlyOpened(limit: Int = 12) -> [LibraryNode] {
+        var found: [LibraryNode] = []
+        Self.collectDocuments(in: roots, into: &found)
+        return found
+            .filter { $0.lastOpenedAt != nil }
+            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    private static func collectDocuments(in nodes: [LibraryNode], into result: inout [LibraryNode]) {
+        for node in nodes {
+            if node.isFolder {
+                collectDocuments(in: node.children ?? [], into: &result)
+            } else {
+                result.append(node)
+            }
+        }
+    }
+
+    func markOpened(id: UUID, at date: Date = Date()) {
+        guard let entry = entry(id: id), entry.kind != .folder else { return }
+        entry.lastOpenedAt = date
+        commit()
     }
 
     func path(to id: UUID) -> [LibraryNode] {

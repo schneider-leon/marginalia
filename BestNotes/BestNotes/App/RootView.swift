@@ -100,18 +100,11 @@ struct RootView: View {
             content(for: tab)
                 .id(tab.id)
         } else {
-            ContentUnavailableView {
-                Label("Kein Dokument geoeffnet", systemImage: "doc.richtext")
-            } description: {
-                Text("Waehle links ein Dokument, oder importiere eine PDF.")
-            } actions: {
-                Button("PDF importieren …", action: presentImporterAtSelection)
-                    .buttonStyle(.borderedProminent)
-            }
-            // Ohne das nimmt die Ansicht nur die Groesse ihres Inhalts an,
-            // und alles, was oben angesetzt wird, landet in der Mitte.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("BestNotes")
+            HomeView(
+                library: library,
+                onOpen: { selection = $0 },
+                onImport: presentImporterAtSelection
+            )
         }
     }
 
@@ -151,6 +144,7 @@ struct RootView: View {
         guard let id = selection, let node = library.node(id: id), node.kind != .folder else { return }
         do {
             try tabs.open(node)
+            library.markOpened(id: id)
         } catch {
             failure = ViewerFailure(error: error)
         }

@@ -22,6 +22,9 @@ final class LibraryEntry {
     var sortIndex: Int = 0
     var created: Date = Date()
     var modified: Date = Date()
+    /// Wann das Dokument zuletzt geoeffnet wurde — `nil` heisst: noch nie.
+    /// Optional, damit SwiftData bestehende Datenbanken ohne Zutun migriert.
+    var lastOpenedAt: Date?
 
     var parent: LibraryEntry?
 
