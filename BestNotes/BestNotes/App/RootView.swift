@@ -56,6 +56,13 @@ struct RootView: View {
         .focusedSceneValue(\.openDocumentAction, presentImporterAtSelection)
         .focusedSceneValue(\.closeTabAction, closeActiveTab)
         .focusedSceneValue(\.tabsStore, tabs)
+        // Die Fensterleiste blendet sonst gegen den Fensterinhalt: im
+        // Schreibmodus scrollt das weisse Papier darunter durch und die
+        // Kapseln um die Schaltflaechen werden heller, waehrend die
+        // PDF-Ansicht als AppKit-View nichts durchlaesst. Ein eigener,
+        // undurchsichtiger Hintergrund macht sie unabhaengig davon.
+        .toolbarBackground(.visible, for: .windowToolbar)
+        .toolbarBackground(Color.documentBackground, for: .windowToolbar)
         // macOS zieht den Trennstrich unter der Titelleiste nach dem
         // Scrollzustand des Inhalts — das sah je nach Dokument anders aus.
         // Wir schalten ihn ab und zeichnen ihn selbst an der Tab-Leiste.
