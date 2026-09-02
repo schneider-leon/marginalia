@@ -18,9 +18,7 @@ struct AnnotationToolbar: View {
 
             Divider().frame(height: 18)
 
-            ToolGroup {
-                PageInsertMenu(session: session)
-            }
+            InsertToolGroup(session: session)
 
             Divider().frame(height: 18)
 

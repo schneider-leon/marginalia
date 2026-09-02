@@ -198,19 +198,7 @@ struct NotebookEditorView: View {
 
             Divider().frame(height: 18)
 
-            ToolGroup {
-                PageInsertMenu(session: session)
-
-                ToolGroupDivider()
-
-                Button {
-                    insertImage(onPage: currentPageIndex)
-                } label: {
-                    Label("Bild einfuegen", systemImage: "photo.badge.plus")
-                        .frame(width: 24, height: 20)
-                }
-                .help("Bild auf der aktuellen Seite einfuegen — oder eine Datei auf die Seite ziehen")
-            }
+            InsertToolGroup(session: session)
 
             Divider().frame(height: 18)
 
@@ -365,11 +353,7 @@ struct NotebookEditorView: View {
     }
 
     private func insertImage(onPage index: Int) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.title = "Bild einfuegen"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = ImagePicker.pickImageURL() else { return }
         do {
             let page = min(max(index, 0), max(session.pageDescriptors.count - 1, 0))
             try session.insertImage(from: url, atPageIndex: page)
