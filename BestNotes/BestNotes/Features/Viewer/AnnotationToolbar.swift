@@ -18,6 +18,12 @@ struct AnnotationToolbar: View {
 
             Divider().frame(height: 18)
 
+            ToolGroup {
+                PageInsertMenu(session: session)
+            }
+
+            Divider().frame(height: 18)
+
             toolPicker
             Divider().frame(height: 18)
             styleControls

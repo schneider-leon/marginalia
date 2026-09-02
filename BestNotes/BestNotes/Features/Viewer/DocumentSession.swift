@@ -227,6 +227,13 @@ final class DocumentSession: Identifiable {
 
     /// Beim Umschalten die Textseiten passend herrichten: eingebrannt fuer
     /// die Annotationsansicht, leer fuer den Schreibmodus.
+    /// Im Annotationsmodus steckt der Text in den Seiten. Aendert sich die
+    /// Seitenzahl, fliesst er um — dann muss er neu eingebrannt werden.
+    private func refreshBurnedTextIfNeeded() {
+        guard notebookMode == .annotate else { return }
+        notebook.burnTextIntoWritablePages(engine: textEngine)
+    }
+
     private func applyModeRendering() {
         switch notebookMode {
         case .annotate:
@@ -282,6 +289,7 @@ final class DocumentSession: Identifiable {
         let position = index.map { $0 + 1 } ?? package.info.pages.count
         try? package.insertBlankPage(at: position)
         syncNotebookState()
+        refreshBurnedTextIfNeeded()
         hasUnsavedChanges = true
         scheduleAutosave()
         commandTarget?.refreshDisplay()
@@ -292,6 +300,7 @@ final class DocumentSession: Identifiable {
         let package = notebook
         package.removePage(at: index)
         syncNotebookState()
+        refreshBurnedTextIfNeeded()
         hasUnsavedChanges = true
         scheduleAutosave()
         commandTarget?.refreshDisplay()
@@ -483,6 +492,39 @@ final class DocumentSession: Identifiable {
 
     func toggleItalic() {
         applyTrait(.italicFontMask)
+    }
+
+    /// Setzt die Ausrichtung des Absatzes und die des naechsten Getippten —
+    /// sonst faellt ein neu begonnener Absatz zurueck.
+    func setAlignment(_ alignment: NSTextAlignment) {
+        defer { formattingRevision &+= 1 }
+        textEngine.setAlignment(alignment, in: selectedTextRange)
+
+        guard let view = activeTextView else { return }
+        var attributes = view.typingAttributes
+        let style = ((attributes[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy()
+            as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+        style.alignment = alignment
+        attributes[.paragraphStyle] = style
+        view.typingAttributes = attributes
+    }
+
+    /// `natural` gilt als linksbuendig — so sieht es der Nutzer auch.
+    var currentAlignment: NSTextAlignment {
+        _ = formattingRevision
+        let storage = textEngine.textStorage
+        if storage.length > 0 {
+            let location = min(max(selectedTextRange.location, 0), storage.length - 1)
+            if let style = storage.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle,
+               style.alignment != .natural {
+                return style.alignment
+            }
+        }
+        if let style = activeTextView?.typingAttributes[.paragraphStyle] as? NSParagraphStyle,
+           style.alignment != .natural {
+            return style.alignment
+        }
+        return .left
     }
 
     func toggleUnderline() {

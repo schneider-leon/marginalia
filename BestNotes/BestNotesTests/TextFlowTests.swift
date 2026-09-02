@@ -152,11 +152,50 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         XCTAssertTrue(session.isUnderlineActive)
     }
 
+    func testAusrichtungGiltFuerGanzeAbsaetze() throws {
+        let package = try NotebookPackage.create(title: "Ausrichtung", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Ausrichtung")
+        let engine = session.textEngine
+
+        let field = NSTextView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 400),
+            textContainer: engine.containers[0]
+        )
+        field.typingAttributes = NotebookTextEngine.defaultAttributes
+        session.activeTextView = field
+
+        engine.textStorage.setAttributedString(NSAttributedString(
+            string: "Erster Absatz\nZweiter Absatz",
+            attributes: NotebookTextEngine.defaultAttributes
+        ))
+
+        XCTAssertEqual(session.currentAlignment, .left, "Ohne Angabe gilt linksbuendig")
+
+        // Cursor mitten im ersten Absatz
+        field.setSelectedRange(NSRange(location: 3, length: 0))
+        session.setAlignment(.center)
+        XCTAssertEqual(session.currentAlignment, .center)
+
+        func alignment(at location: Int) -> NSTextAlignment? {
+            (engine.textStorage.attribute(.paragraphStyle, at: location, effectiveRange: nil)
+                as? NSParagraphStyle)?.alignment
+        }
+        XCTAssertEqual(alignment(at: 0), .center, "Der ganze Absatz, nicht nur die Cursorstelle")
+        XCTAssertEqual(alignment(at: 12), .center)
+        XCTAssertNotEqual(alignment(at: 20), .center, "Der zweite Absatz bleibt unberuehrt")
+
+        field.setSelectedRange(NSRange(location: 20, length: 0))
+        session.setAlignment(.right)
+        XCTAssertEqual(alignment(at: 20), .right)
+        XCTAssertEqual(alignment(at: 0), .center)
+    }
+
     func testTextUndFormatUeberlebenDasSichern() throws {
         let package = try NotebookPackage.create(title: "RTF", at: workingDirectory)
         let engine = filledEngine(package, repeating: 5)
         engine.toggleTrait(.boldFontMask, in: NSRange(location: 0, length: 10))
         engine.toggleUnderline(in: NSRange(location: 0, length: 10))
+        engine.setAlignment(.center, in: NSRange(location: 0, length: 1))
         package.setBodyRTF(engine.rtfData())
         try package.write()
 
@@ -171,6 +210,12 @@ final class TextFlowTests: TemporaryDirectoryTestCase {
         XCTAssertNotEqual(
             restored.textStorage.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int, 0,
             "Unterstreichung muss den RTF-Weg ueberstehen"
+        )
+        XCTAssertEqual(
+            (restored.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
+                as? NSParagraphStyle)?.alignment,
+            .center,
+            "Ausrichtung muss den RTF-Weg ueberstehen"
         )
     }
 

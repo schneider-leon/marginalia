@@ -257,6 +257,35 @@ final class NotebookSessionTests: TemporaryDirectoryTestCase {
         XCTAssertEqual(note.contents, "Erste Fassung")
     }
 
+    /// Im Annotationsmodus steckt der Text in den Seiten. Kommt eine Seite
+    /// dazu, fliesst er um — die eingebrannte Fassung muss nachziehen.
+    func testSeiteEinfuegenImAnnotationsmodusBrenntNeu() throws {
+        let package = try NotebookPackage.create(title: "Umbruch", at: workingDirectory)
+        let session = DocumentSession(package: package, name: "Umbruch")
+        session.textEngine.textStorage.setAttributedString(NSAttributedString(
+            string: String(repeating: "Fliesstext ueber mehrere Seiten. ", count: 200),
+            attributes: NotebookTextEngine.defaultAttributes
+        ))
+        session.growPagesIfNeeded()
+        session.notebookMode = .annotate
+
+        let before = (0..<package.pdf.pageCount)
+            .compactMap { package.pdf.page(at: $0)?.string }.joined()
+        XCTAssertTrue(before.contains("Fliesstext"))
+
+        session.setCurrentPage(0)
+        session.insertBlankPage(after: 0)
+
+        let after = (0..<package.pdf.pageCount)
+            .compactMap { package.pdf.page(at: $0)?.string }.joined()
+        XCTAssertTrue(after.contains("Fliesstext"), "Nach dem Einfuegen fehlt der eingebrannte Text")
+        XCTAssertGreaterThanOrEqual(
+            after.replacingOccurrences(of: " ", with: "").count,
+            before.replacingOccurrences(of: " ", with: "").count - 5,
+            "Beim Neubrennen ist Text verlorengegangen"
+        )
+    }
+
     /// Beide Modi teilen sich die Seitenposition — beim Umschalten darf die
     /// Ansicht nicht wieder vorne anfangen.
     func testSeitenpositionUeberlebtDenModuswechsel() throws {

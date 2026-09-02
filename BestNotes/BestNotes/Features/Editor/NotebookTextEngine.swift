@@ -219,6 +219,27 @@ final class NotebookTextEngine: NSObject, NSTextStorageDelegate {
         textStorage.endEditing()
     }
 
+    /// Ausrichtung gilt fuer ganze Absaetze — der Bereich wird deshalb auf
+    /// die betroffenen Absaetze erweitert.
+    func setAlignment(_ alignment: NSTextAlignment, in range: NSRange) {
+        guard textStorage.length > 0 else { return }
+        let clamped = NSRange(
+            location: min(range.location, textStorage.length - 1),
+            length: min(range.length, textStorage.length - min(range.location, textStorage.length - 1))
+        )
+        let paragraphRange = (textStorage.string as NSString).paragraphRange(for: clamped)
+        guard paragraphRange.length > 0 else { return }
+
+        textStorage.beginEditing()
+        textStorage.enumerateAttribute(.paragraphStyle, in: paragraphRange) { value, subrange, _ in
+            let style = ((value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle)
+                ?? NSMutableParagraphStyle()
+            style.alignment = alignment
+            textStorage.addAttribute(.paragraphStyle, value: style, range: subrange)
+        }
+        textStorage.endEditing()
+    }
+
     func setFontSize(_ size: CGFloat, in range: NSRange) {
         guard range.length > 0 else { return }
         textStorage.beginEditing()

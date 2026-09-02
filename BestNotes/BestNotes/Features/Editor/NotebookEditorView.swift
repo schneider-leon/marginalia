@@ -199,20 +199,7 @@ struct NotebookEditorView: View {
             Divider().frame(height: 18)
 
             ToolGroup {
-                Menu {
-                    Button("Am Ende anhaengen") {
-                        session.insertBlankPage()
-                    }
-                    Button("Nach Seite \(currentPageIndex + 1) einfuegen") {
-                        session.insertBlankPage(after: currentPageIndex)
-                    }
-                    .disabled(currentPageIndex + 1 >= session.pageDescriptors.count)
-                } label: {
-                    Label("Seite einfuegen", systemImage: "plus.rectangle.portrait")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Leere Seite einfuegen")
+                PageInsertMenu(session: session)
 
                 ToolGroupDivider()
 
@@ -228,6 +215,8 @@ struct NotebookEditorView: View {
             Divider().frame(height: 18)
 
             formatGroup
+
+            alignmentGroup
 
             Divider().frame(height: 18)
 
@@ -281,6 +270,29 @@ struct NotebookEditorView: View {
             .fixedSize()
             .help("Schriftgroesse")
         }
+    }
+
+    private var alignmentGroup: some View {
+        ToolGroup {
+            alignmentToggle("Linksbuendig", symbol: "text.alignleft", alignment: .left)
+            ToolGroupDivider()
+            alignmentToggle("Zentriert", symbol: "text.aligncenter", alignment: .center)
+            ToolGroupDivider()
+            alignmentToggle("Rechtsbuendig", symbol: "text.alignright", alignment: .right)
+        }
+    }
+
+    private func alignmentToggle(
+        _ label: String,
+        symbol: String,
+        alignment: NSTextAlignment
+    ) -> some View {
+        formatToggle(
+            label,
+            symbol: symbol,
+            isOn: session.currentAlignment == alignment,
+            action: { session.setAlignment(alignment) }
+        )
     }
 
     /// Zeigt an, ob die Eigenschaft gerade gilt — blau hinterlegt wie die
