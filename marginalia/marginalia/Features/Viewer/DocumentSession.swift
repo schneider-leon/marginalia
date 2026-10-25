@@ -148,6 +148,9 @@ final class DocumentSession: Identifiable {
     var notebookMode: NotebookMode = .write {
         didSet {
             guard notebookMode != oldValue else { return }
+            // Switching modes anchors the image — it should not come back
+            // with its handles still showing.
+            selectedOverlayID = nil
             applyModeRendering()
         }
     }
@@ -208,6 +211,22 @@ final class DocumentSession: Identifiable {
     var canUndo: Bool { _ = editRevision; return undoManager.canUndo }
     var canRedo: Bool { _ = editRevision; return undoManager.canRedo }
 
+    /// Older highlights carried the marked text as `contents`, and PDFKit
+    /// shows a clickable note button next to any highlight with contents.
+    /// A highlight should be just the marking.
+    private static func stripHighlightPopups(in document: PDFDocument) {
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            for annotation in page.annotations where annotation.type == "Highlight" {
+                annotation.contents = nil
+                if let popup = annotation.popup {
+                    page.removeAnnotation(popup)
+                    annotation.popup = nil
+                }
+            }
+        }
+    }
+
     init(package: NotebookPackage, name: String) {
         self.notebook = package
         self.document = package.pdf
@@ -221,6 +240,7 @@ final class DocumentSession: Identifiable {
         // Text pages with burned-in text may be on disk; in writing mode the
         // text comes from the text view.
         package.clearWritablePages()
+        Self.stripHighlightPopups(in: package.pdf)
         loadWarnings = package.loadWarnings
         package.pruneUnreferencedAssets()
         pageDescriptors = package.info.pages
@@ -737,7 +757,12 @@ final class DocumentSession: Identifiable {
     func noteMoved(_ annotation: PDFAnnotation, on page: PDFPage, from oldBounds: CGRect) {
         let newBounds = annotation.bounds
         guard newBounds != oldBounds else { return }
-        undoManager.setActionName("Move Note")
+        let actionName = switch annotation.type {
+        case "FreeText": "Move Note"
+        case "Ink": "Move Drawing"
+        default: "Move Annotation"
+        }
+        undoManager.setActionName(actionName)
         undoManager.registerUndo(withTarget: self) { session in
             annotation.bounds = oldBounds
             session.noteMoved(annotation, on: page, from: newBounds)
@@ -811,5 +836,21 @@ extension DocumentSession: AnnotationEditingDelegate {
 
     func annotationView(_ view: AnnotatingPDFView, didEditNote annotation: PDFAnnotation, on page: PDFPage, from oldText: String?) {
         noteEdited(annotation, on: page, from: oldText)
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, imageAt point: CGPoint, on page: PDFPage) -> (id: UUID, frame: CGRect)? {
+        let index = document.index(for: page)
+        guard index != NSNotFound else { return nil }
+        // Drawn in this order, so the last one is on top.
+        guard let hit = imageOverlays(atPageIndex: index).last(where: { $0.frame.contains(point) }) else {
+            return nil
+        }
+        return (hit.id, hit.frame)
+    }
+
+    func annotationView(_ view: AnnotatingPDFView, didEraseImage id: UUID, on page: PDFPage) {
+        let index = document.index(for: page)
+        guard index != NSNotFound, let pageID = notebook.pageID(at: index) else { return }
+        removeOverlay(id: id, pageID: pageID, actionName: "Delete Image")
     }
 }

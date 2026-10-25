@@ -12,7 +12,6 @@
 import AppKit
 import PDFKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 // MARK: - Background
 
@@ -32,9 +31,6 @@ final class NotebookPageBackgroundView: NSView {
     var insets: TextInsets = .standard
     var lineHeight: CGFloat = 16
 
-    var onDropImageData: ((Data, String) -> Void)?
-    var onDropFileURL: ((URL) -> Void)?
-
     override var isFlipped: Bool { true }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -53,55 +49,11 @@ final class NotebookPageBackgroundView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         appearance = NSAppearance(named: .aqua)
-        registerForDraggedTypes([.fileURL, .png, .tiff])
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         appearance = NSAppearance(named: .aqua)
-        registerForDraggedTypes([.fileURL, .png, .tiff])
-    }
-
-    // MARK: - Drag & Drop
-    //
-    // The drop is attached to the background view because it is always hit
-    // — the image layer above deliberately declares itself not responsible
-    // for empty spots.
-
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        droppableImageURL(sender) != nil || droppableImageData(sender) != nil ? .copy : []
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        draggingEntered(sender)
-    }
-
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if let url = droppableImageURL(sender) {
-            onDropFileURL?(url)
-            return true
-        }
-        if let (data, ext) = droppableImageData(sender) {
-            onDropImageData?(data, ext)
-            return true
-        }
-        return false
-    }
-
-    private func droppableImageURL(_ sender: any NSDraggingInfo) -> URL? {
-        let options: [NSPasteboard.ReadingOptionKey: Any] = [
-            .urlReadingFileURLsOnly: true,
-            .urlReadingContentsConformToTypes: [UTType.image.identifier]
-        ]
-        return (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options)
-            as? [URL])?.first
-    }
-
-    private func droppableImageData(_ sender: any NSDraggingInfo) -> (Data, String)? {
-        let board = sender.draggingPasteboard
-        if let data = board.data(forType: .png) { return (data, "png") }
-        if let data = board.data(forType: .tiff) { return (data, "tiff") }
-        return nil
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -167,8 +119,8 @@ struct NotebookPageView: NSViewRepresentable {
             textView.typingAttributes = NotebookTextEngine.defaultAttributes
             textView.appearance = NSAppearance(named: .aqua)
             textView.insertionPointColor = .black
-            // The text view may keep text drops; images and files should
-            // fall through to the page.
+            // The text view may keep text drops; images and files must not
+            // end up in the text as attachments.
             textView.unregisterDraggedTypes()
             textView.registerForDraggedTypes([.string])
             view.addSubview(textView)
@@ -184,16 +136,6 @@ struct NotebookPageView: NSViewRepresentable {
         view.addSubview(overlayView)
         context.coordinator.overlayView = overlayView
 
-        view.onDropFileURL = { [weak session] url in
-            guard let session else { return }
-            session.setCurrentPage(pageIndex)
-            try? session.insertImage(from: url, atPageIndex: pageIndex)
-        }
-        view.onDropImageData = { [weak session] data, ext in
-            guard let session else { return }
-            session.setCurrentPage(pageIndex)
-            session.insertImage(data: data, fileExtension: ext, atPageIndex: pageIndex)
-        }
         return view
     }
 

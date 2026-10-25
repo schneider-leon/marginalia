@@ -11,13 +11,34 @@
 
 import AppKit
 import Foundation
+import PDFKit
 
 @MainActor
 final class ImageOverlayNSView: NSView {
 
     var session: DocumentSession?
     var pageIndex = 0
-    var pageSize: CGSize = PDFPageFactory.a4
+    /// Only set in the PDF view, to find the page again after it moved.
+    weak var page: PDFPage?
+    var pageSize: CGSize = PDFPageFactory.a4 {
+        didSet { syncBoundsToPageSize() }
+    }
+
+    /// In annotation mode images can only be grabbed with the select tool —
+    /// with the pen they would otherwise be dragged instead of drawn on.
+    var allowsInteraction = true {
+        didSet {
+            guard allowsInteraction != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+
+    /// A move or resize starts — the PDF view hides its hover outline,
+    /// which would otherwise stay behind at the old spot.
+    var onInteractionBegan: (() -> Void)?
+
+    private var mouseDownMonitor: Any?
+    private var cursorTracking: NSTrackingArea?
 
     private static let handleSize: CGFloat = 8
     private static let minimumSize: CGFloat = 24
@@ -36,6 +57,52 @@ final class ImageOverlayNSView: NSView {
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    // MARK: - Scaling
+    //
+    // The view always works in page points. In the PDF view of annotation
+    // mode PDFKit sizes it to the zoomed page; the bounds keep the page size,
+    // so AppKit does the scaling.
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncBoundsToPageSize()
+    }
+
+    private func syncBoundsToPageSize() {
+        guard frame.width > 0, frame.height > 0, bounds.size != pageSize else { return }
+        bounds = CGRect(origin: .zero, size: pageSize)
+        needsDisplay = true
+    }
+
+    // MARK: - Anchoring
+    //
+    // A click next to the image does not reach this view — it lands in the
+    // text or the PDF view. So we watch for it here to drop the selection,
+    // which anchors the image.
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let mouseDownMonitor {
+            NSEvent.removeMonitor(mouseDownMonitor)
+            self.mouseDownMonitor = nil
+        }
+        guard window != nil else { return }
+        mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.handleMouseDownAnywhere(event)
+            return event
+        }
+    }
+
+    private func handleMouseDownAnywhere(_ event: NSEvent) {
+        guard let session, let window, event.window === window else { return }
+        let hit = window.contentView?.hitTest(event.locationInWindow)
+        if !(hit is ImageOverlayNSView), session.selectedOverlayID != nil {
+            session.selectedOverlayID = nil
+        }
+        // Another page's view may take over the selection — redraw after it.
+        DispatchQueue.main.async { [weak self] in self?.needsDisplay = true }
+    }
 
     // MARK: - Coordinates
     //
@@ -68,6 +135,8 @@ final class ImageOverlayNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let session else { return }
+        // The selection may have changed — and with it the hand's area.
+        window?.invalidateCursorRects(for: self)
 
         for overlay in overlays {
             guard case .image(let content) = overlay.content,
@@ -79,10 +148,12 @@ final class ImageOverlayNSView: NSView {
                 in: rect,
                 from: .zero,
                 operation: .sourceOver,
-                fraction: content.opacity
+                fraction: content.opacity,
+                respectFlipped: true,
+                hints: nil
             )
 
-            guard overlay.id == session.selectedOverlayID else { continue }
+            guard allowsInteraction, overlay.id == session.selectedOverlayID else { continue }
 
             NSColor.controlAccentColor.setStroke()
             let outline = NSBezierPath(rect: rect)
@@ -100,13 +171,67 @@ final class ImageOverlayNSView: NSView {
         }
     }
 
+    // MARK: - Cursor
+    //
+    // Over the active image the hand shows that it can be grabbed. Cursor
+    // rects alone are not enough: the text view and the PDF view below set
+    // their own cursor on every mouse movement — so it is set here as well,
+    // and the PDF view asks via `showsHandCursor(atWindowPoint:)`.
+
+    private var selectedRect: CGRect? {
+        guard allowsInteraction, let id = session?.selectedOverlayID,
+              let overlay = overlays.first(where: { $0.id == id })
+        else { return nil }
+        return viewRect(overlay.frame)
+    }
+
+    func showsHandCursor(atWindowPoint point: NSPoint) -> Bool {
+        guard let rect = selectedRect else { return false }
+        return rect.insetBy(dx: -Self.handleSize / 2, dy: -Self.handleSize / 2)
+            .contains(convert(point, from: nil))
+    }
+
+    override func resetCursorRects() {
+        if let rect = selectedRect {
+            addCursorRect(rect, cursor: .pointingHand)
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let cursorTracking { removeTrackingArea(cursorTracking) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        cursorTracking = area
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if showsHandCursor(atWindowPoint: event.locationInWindow) {
+            NSCursor.pointingHand.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        guard showsHandCursor(atWindowPoint: event.locationInWindow) else { return }
+        // After the views below have set theirs.
+        DispatchQueue.main.async { NSCursor.pointingHand.set() }
+    }
+
     // MARK: - Hit Testing
     //
     // `nil` means: this point does not belong to us. The event then falls
     // through to the text view below — exactly as intended.
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard let session else { return nil }
+        guard let session, allowsInteraction, !isHidden else { return nil }
         let local = convert(point, from: superview)
 
         for overlay in overlays.reversed() {
@@ -136,6 +261,7 @@ final class ImageOverlayNSView: NSView {
                 for (corner, handle) in handleRects(for: rect) where handle.contains(point) {
                     interaction = .resize(id: overlay.id, start: rect, corner: corner)
                     frameBeforeInteraction = overlay.frame
+                    trackUntilMouseUp()
                     return
                 }
             }
@@ -149,12 +275,29 @@ final class ImageOverlayNSView: NSView {
                 )
                 frameBeforeInteraction = overlay.frame
                 needsDisplay = true
+                trackUntilMouseUp()
                 return
             }
         }
 
         session.selectedOverlayID = nil
         needsDisplay = true
+    }
+
+    /// Follows the mouse until it is released. PDFKit routes the drag events
+    /// of its page layers by position — as soon as the mouse left the image's
+    /// old spot, they no longer arrived here and the image stopped halfway.
+    private func trackUntilMouseUp() {
+        guard let window else { return }
+        onInteractionBegan?()
+        while let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            if event.type == .leftMouseUp {
+                mouseUp(with: event)
+                return
+            }
+            mouseDragged(with: event)
+            NSCursor.closedHand.set()
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {

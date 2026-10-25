@@ -26,6 +26,11 @@ protocol AnnotationEditingDelegate: AnyObject {
 
     /// The text of a note was changed.
     func annotationView(_ view: AnnotatingPDFView, didEditNote annotation: PDFAnnotation, on page: PDFPage, from oldText: String?)
+
+    /// Frame of the topmost image at this spot, in page coordinates. Images
+    /// are not annotations — they lie above the page in their own layer.
+    func annotationView(_ view: AnnotatingPDFView, imageAt point: CGPoint, on page: PDFPage) -> (id: UUID, frame: CGRect)?
+    func annotationView(_ view: AnnotatingPDFView, didEraseImage id: UUID, on page: PDFPage)
 }
 
 final class AnnotatingPDFView: PDFView {
@@ -51,8 +56,10 @@ final class AnnotatingPDFView: PDFView {
     private var livePage: PDFPage?
     private var livePoints: [CGPoint] = []
 
-    // State while moving a sticky note
-    private var movingNote: (annotation: PDFAnnotation, page: PDFPage, start: CGRect, grab: CGPoint)?
+    // State while moving a note or, with the select tool, any annotation
+    // except highlights. `visualStart` is what has to stay on the page —
+    // for freehand strokes that is the stroke, not the page-sized bounds.
+    private var movingNote: (annotation: PDFAnnotation, page: PDFPage, start: CGRect, visualStart: CGRect, grab: CGPoint)?
 
     private var hoverTracking: NSTrackingArea?
 
@@ -134,6 +141,12 @@ final class AnnotatingPDFView: PDFView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         updateHover(for: event)
+        // PDFKit sets its own cursor here; over the active image the hand
+        // wins.
+        if let image = window?.contentView?.hitTest(event.locationInWindow) as? ImageOverlayNSView,
+           image.showsHandCursor(atWindowPoint: event.locationInWindow) {
+            NSCursor.pointingHand.set()
+        }
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -149,9 +162,10 @@ final class AnnotatingPDFView: PDFView {
 
         switch activeTool {
         case .select:
-            // On a note the select tool moves it; otherwise the PDFView's
-            // text selection applies.
-            if let hit = note(at: point, on: page) {
+            // The select tool moves everything except highlights — those
+            // belong to the text. Elsewhere the PDFView's text selection
+            // applies. Images are grabbed by their own layer above.
+            if let hit = movable(at: point, on: page) {
                 beginMovingNote(hit, at: point, on: page)
             } else {
                 super.mouseDown(with: event)
@@ -168,7 +182,12 @@ final class AnnotatingPDFView: PDFView {
             beginNoteInteraction(at: point, on: page)
 
         case .eraser:
-            if let hit = erasable(at: point, on: page) {
+            // Images lie above everything else, so they are hit first.
+            if let image = editingDelegate?.annotationView(self, imageAt: point, on: page) {
+                hideHover()
+                editingDelegate?.annotationView(self, didEraseImage: image.id, on: page)
+                updateHover(for: event)
+            } else if let hit = erasable(at: point, on: page) {
                 // Restore the real colors first, otherwise the faint preview
                 // ends up on the undo stack.
                 hideHover()
@@ -331,20 +350,37 @@ final class AnnotatingPDFView: PDFView {
         return hit
     }
 
+    /// What the select tool would move at this spot.
+    private func movable(at point: CGPoint, on page: PDFPage) -> PDFAnnotation? {
+        guard let hit = erasable(at: point, on: page),
+              !["Highlight", "Link", "Widget"].contains(hit.type ?? "")
+        else { return nil }
+        return hit
+    }
+
     private func beginMovingNote(_ note: PDFAnnotation, at point: CGPoint, on page: PDFPage) {
+        let visual = visualBounds(of: note)
         movingNote = (
-            note, page, note.bounds,
+            note, page, note.bounds, visual,
             CGPoint(x: point.x - note.bounds.minX, y: point.y - note.bounds.minY)
         )
-        showOutline(around: note.bounds, on: page)
+        showOutline(around: visual, on: page)
     }
 
     private func dragNote(to point: CGPoint) {
         guard let moving = movingNote else { return }
-        var bounds = moving.start
-        bounds.origin = CGPoint(x: point.x - moving.grab.x, y: point.y - moving.grab.y)
-        moving.annotation.bounds = clampToPage(bounds, on: moving.page)
-        showOutline(around: moving.annotation.bounds, on: moving.page)
+        // Clamp what is visible, then shift the bounds by the same amount.
+        var visual = moving.visualStart
+        visual.origin = CGPoint(
+            x: point.x - moving.grab.x + (moving.visualStart.minX - moving.start.minX),
+            y: point.y - moving.grab.y + (moving.visualStart.minY - moving.start.minY)
+        )
+        visual = clampToPage(visual, on: moving.page)
+        moving.annotation.bounds = moving.start.offsetBy(
+            dx: visual.minX - moving.visualStart.minX,
+            dy: visual.minY - moving.visualStart.minY
+        )
+        showOutline(around: visual, on: moving.page)
         needsDisplay = true
     }
 
@@ -365,19 +401,30 @@ final class AnnotatingPDFView: PDFView {
 
     // MARK: - Hover
 
-    /// Outlines the object under the mouse: notes for the select and note
-    /// tools, and for the eraser everything a click would delete — which is
-    /// also drawn fainter.
+    /// Outlines the object under the mouse: for the select tool everything
+    /// it can move, notes for the note tool, and for the eraser everything a
+    /// click would delete — which is also drawn fainter.
     private func updateHover(for event: NSEvent) {
         guard movingNote == nil else { return }
         guard let (page, point) = locate(event) else { return hideHover() }
 
         switch activeTool {
-        case .select, .text:
+        case .select:
+            if let image = editingDelegate?.annotationView(self, imageAt: point, on: page) {
+                return showOutline(around: image.frame, on: page)
+            }
+            guard let hit = movable(at: point, on: page) else { return hideHover() }
+            showOutline(around: visualBounds(of: hit), on: page)
+
+        case .text:
             guard let hit = note(at: point, on: page) else { return hideHover() }
             showOutline(around: hit.bounds, on: page)
 
         case .eraser:
+            if let image = editingDelegate?.annotationView(self, imageAt: point, on: page) {
+                endErasePreview()
+                return showOutline(around: image.frame, on: page)
+            }
             guard let hit = erasable(at: point, on: page) else { return hideHover() }
             if erasePreview?.annotation !== hit {
                 endErasePreview()
@@ -508,7 +555,6 @@ final class AnnotatingPDFView: PDFView {
                 guard bounds.width > 0, bounds.height > 0 else { continue }
                 let annotation = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
                 annotation.color = style.highlightNSColor
-                annotation.contents = line.string
                 byPage[page, default: []].append(annotation)
             }
         }

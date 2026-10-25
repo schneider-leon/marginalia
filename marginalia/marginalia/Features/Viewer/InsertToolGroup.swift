@@ -2,15 +2,14 @@
 //  InsertToolGroup.swift
 //  marginalia
 //
-//  Inserting a page or an image — the same group in both modes.
+//  Inserting a page (both modes) or an image (annotation mode).
 //
 
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The file dialog for images — in one place, because a page's context
-/// menu opens it too.
+/// The file dialog for images.
 @MainActor
 enum ImagePicker {
     static func pickImageURL() -> URL? {
@@ -25,20 +24,25 @@ enum ImagePicker {
 struct InsertToolGroup: View {
     @Bindable var session: DocumentSession
 
-    @State private var failure: ViewerFailure?
-
     var body: some View {
         ToolGroup {
             PageInsertMenu(session: session)
-
-            ToolGroupDivider()
-
-            Button(action: insertImage) {
-                Label("Insert Image", systemImage: "photo.badge.plus")
-                    .frame(width: 24, height: 20)
-            }
-            .help("Insert an image on the current page — or drag a file onto the page")
         }
+    }
+}
+
+/// Only in annotation mode — it sits next to the annotation tools.
+struct InsertImageButton: View {
+    @Bindable var session: DocumentSession
+
+    @State private var failure: ViewerFailure?
+
+    var body: some View {
+        Button(action: insertImage) {
+            Label("Insert Image", systemImage: "photo.badge.plus")
+                .frame(width: 24, height: 20)
+        }
+        .help("Insert an image on the current page")
         .alert(item: $failure) { failure in
             Alert(
                 title: Text(failure.message),
@@ -50,14 +54,6 @@ struct InsertToolGroup: View {
 
     private func insertImage() {
         guard let url = ImagePicker.pickImageURL() else { return }
-
-        // Images live next to `content.pdf` and are drawn by the writing
-        // mode's page view — that is also where the handles for moving them
-        // are. From annotation mode the image would otherwise be invisible,
-        // so we switch along.
-        if session.notebookMode != .write {
-            session.notebookMode = .write
-        }
 
         do {
             let page = min(max(session.currentPageIndex, 0), max(session.pageDescriptors.count - 1, 0))

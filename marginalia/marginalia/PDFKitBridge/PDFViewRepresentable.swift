@@ -24,9 +24,17 @@ struct PDFViewRepresentable: NSViewRepresentable {
     let activeTool: AnnotationTool
     let style: AnnotationStyle
     let zoom: CGFloat
+    /// Only so that image changes redraw the image layers.
+    let overlayRevision: Int
+    let selectedOverlayID: UUID?
 
     func makeNSView(context: Context) -> AnnotatingPDFView {
         let view = AnnotatingPDFView()
+        // Images are not part of `content.pdf` — they are laid over the
+        // pages, the same view as in writing mode. The provider has to be
+        // there before the document, otherwise PDFKit does not ask for it.
+        view.pageOverlayViewProvider = context.coordinator
+        context.coordinator.imagesAreInteractive = activeTool == .select
         view.document = session.document
         view.editingDelegate = session
         view.activeTool = activeTool
@@ -65,6 +73,8 @@ struct PDFViewRepresentable: NSViewRepresentable {
             nsView.activeTool = activeTool
         }
         nsView.style = style
+        context.coordinator.imagesAreInteractive = activeTool == .select
+        context.coordinator.refreshImageOverlays()
     }
 
     static func dismantleNSView(_ nsView: AnnotatingPDFView, coordinator: Coordinator) {
@@ -82,9 +92,23 @@ struct PDFViewRepresentable: NSViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject, PDFViewCommandTarget {
+    final class Coordinator: NSObject, PDFViewCommandTarget, PDFPageOverlayViewProvider {
         private let session: DocumentSession
         private weak var pdfView: AnnotatingPDFView?
+
+        /// One image layer per page PDFKit currently shows.
+        private var imageOverlays: [ObjectIdentifier: ImageOverlayNSView] = [:]
+
+        var imagesAreInteractive = true {
+            didSet {
+                guard imagesAreInteractive != oldValue else { return }
+                // Not during the SwiftUI update this is set from.
+                if !imagesAreInteractive {
+                    DispatchQueue.main.async { [session] in session.selectedOverlayID = nil }
+                }
+                refreshImageOverlays()
+            }
+        }
 
         init(session: DocumentSession) {
             self.session = session
@@ -117,6 +141,8 @@ struct PDFViewRepresentable: NSViewRepresentable {
         }
 
         func detach() {
+            pdfView?.pageOverlayViewProvider = nil
+            imageOverlays.removeAll()
             NotificationCenter.default.removeObserver(self)
             if session.commandTarget === self {
                 session.commandTarget = nil
@@ -152,6 +178,40 @@ struct PDFViewRepresentable: NSViewRepresentable {
             session.reportScale(pdfView.scaleFactor)
         }
 
+        // MARK: Image Layers
+
+        func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> NSView? {
+            let overlay = ImageOverlayNSView()
+            overlay.session = session
+            overlay.onInteractionBegan = { [weak self] in self?.pdfView?.hideHover() }
+            configure(overlay, for: page)
+            imageOverlays[ObjectIdentifier(page)] = overlay
+            return overlay
+        }
+
+        func pdfView(_ pdfView: PDFView, willEndDisplayingOverlayView overlayView: NSView, for page: PDFPage) {
+            imageOverlays[ObjectIdentifier(page)] = nil
+        }
+
+        /// Pages move when one is inserted, and the images can change at any
+        /// time — so index and drawing are refreshed together.
+        func refreshImageOverlays() {
+            for overlay in imageOverlays.values {
+                guard let page = overlay.page else { continue }
+                configure(overlay, for: page)
+            }
+        }
+
+        private func configure(_ overlay: ImageOverlayNSView, for page: PDFPage) {
+            overlay.page = page
+            if let index = page.document?.index(for: page), index != NSNotFound {
+                overlay.pageIndex = index
+            }
+            overlay.pageSize = page.bounds(for: .cropBox).size
+            overlay.allowsInteraction = imagesAreInteractive
+            overlay.needsDisplay = true
+        }
+
         // MARK: Session -> PDFView
 
         func go(toPageIndex index: Int) {
@@ -175,6 +235,7 @@ struct PDFViewRepresentable: NSViewRepresentable {
             // The annotation under the eraser may just have disappeared.
             pdfView?.hideHover()
             pdfView?.needsDisplay = true
+            refreshImageOverlays()
         }
 
         func endTransientPreviews() {

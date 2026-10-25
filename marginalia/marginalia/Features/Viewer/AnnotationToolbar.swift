@@ -22,7 +22,12 @@ struct AnnotationToolbar: View {
 
             Divider().frame(height: 18)
 
-            toolPicker
+            HStack(spacing: 6) {
+                toolPicker
+                ToolGroup {
+                    InsertImageButton(session: session)
+                }
+            }
             Divider().frame(height: 18)
             styleControls
             Spacer(minLength: 0)

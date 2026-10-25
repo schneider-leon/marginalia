@@ -179,8 +179,6 @@ struct NotebookEditorView: View {
         // No page number of its own on the page: the PDF view has none, and
         // the window toolbar shows "x of y" in both modes anyway.
         .contextMenu {
-            Button("Insert Image…") { insertImage(onPage: index) }
-            Divider()
             Button("Insert Blank Page After") { session.insertBlankPage(after: index) }
             Button("Delete Page", role: .destructive) { session.removePage(at: index) }
                 .disabled(session.pageDescriptors.count < 2)
@@ -350,15 +348,5 @@ struct NotebookEditorView: View {
 
     private func exportCopy() {
         do { try session.exportCopy() } catch { failure = ViewerFailure(error: error) }
-    }
-
-    private func insertImage(onPage index: Int) {
-        guard let url = ImagePicker.pickImageURL() else { return }
-        do {
-            let page = min(max(index, 0), max(session.pageDescriptors.count - 1, 0))
-            try session.insertImage(from: url, atPageIndex: page)
-        } catch {
-            failure = ViewerFailure(error: error)
-        }
     }
 }
