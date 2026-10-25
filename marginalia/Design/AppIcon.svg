@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- marginalia app icon: a sheet with lines of text, a margin rule and a
+       handwritten note in the margin. Source for AppIcon.appiconset,
+       export with Design/export-icon.sh -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E4E79"/>
+      <stop offset="1" stop-color="#162A45"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFDF7"/>
+      <stop offset="1" stop-color="#F1ECDF"/>
+    </linearGradient>
+    <!-- Shadows without feDropShadow so Inkscape renders them -->
+    <filter id="iconShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dy="12"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.32"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="paperShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12"/>
+      <feOffset dy="10"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="squircle">
+      <rect x="100" y="100" width="824" height="824" rx="185"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#iconShadow)"/>
+
+  <g clip-path="url(#squircle)">
+    <!-- Sheet -->
+    <rect x="236" y="196" width="552" height="700" rx="30" fill="url(#paper)" filter="url(#paperShadow)"/>
+
+    <!-- Margin rule -->
+    <line x1="392" y1="196" x2="392" y2="896" stroke="#E8603C" stroke-width="6" opacity="0.45"/>
+
+    <!-- Highlight behind two lines -->
+    <rect x="414" y="404" width="322" height="52" rx="14" fill="#FFD54A"/>
+    <rect x="414" y="474" width="256" height="52" rx="14" fill="#FFD54A"/>
+
+    <!-- Lines of text -->
+    <g stroke="#B3AC9C" stroke-width="22" stroke-linecap="round">
+      <line x1="436" y1="290" x2="724" y2="290"/>
+      <line x1="436" y1="360" x2="700" y2="360"/>
+      <line x1="436" y1="430" x2="714" y2="430"/>
+      <line x1="436" y1="500" x2="648" y2="500"/>
+      <line x1="436" y1="600" x2="728" y2="600"/>
+      <line x1="436" y1="670" x2="684" y2="670"/>
+      <line x1="436" y1="740" x2="716" y2="740"/>
+      <line x1="436" y1="810" x2="590" y2="810"/>
+    </g>
+  </g>
+
+  <!-- Handwritten margin note: curly brace and asterisk -->
+  <g fill="none" stroke="#E8603C" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 362 398 C 334 398, 340 426, 340 446 C 340 460, 332 465, 314 465
+             C 332 465, 340 470, 340 484 C 340 504, 334 532, 362 532"/>
+    <path d="M 320 642 L 360 698 M 360 642 L 320 698 M 308 670 L 372 670"/>
+  </g>
+</svg>

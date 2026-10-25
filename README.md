@@ -1,297 +1,158 @@
-# BestNotes
+<p align="center">
+  <img src="marginalia/marginalia/Assets.xcassets/AppIcon.appiconset/icon_256.png" alt="marginalia" width="96" height="96">
+</p>
 
-Native macOS-App als Alternative zu Goodnotes — mit dem Fokus auf **getippten** Notizen,
-PDF-Import und PDF-Annotation. Kein Handschrift-Input.
+<h1 align="center">marginalia</h1>
 
-- **Sprache/UI:** Swift 5 (Compiler 6.x), SwiftUI mit AppKit-Interop
-- **PDF:** PDFKit (Rendering, Annotationen, Export)
-- **Metadaten/Bibliothek:** SwiftData
-- **Deployment Target:** macOS 15.0
-- **Sandbox:** aktiv, `com.apple.security.files.user-selected.read-write`
+<p align="center">
+  A native macOS notebook for typed notes and PDF annotation — built with SwiftUI, AppKit and PDFKit.<br>
+</p>
 
----
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey" alt="macOS 15+">
+  <img src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit-F05138" alt="SwiftUI + AppKit">
+  <img src="https://img.shields.io/badge/PDF-PDFKit-008080" alt="PDFKit">
+</p>
 
-## Projektstruktur
+marginalia is a notebook app for people who take notes with a keyboard. You write on
+pages, import lecture slides and papers as PDFs, and mark them up with highlights,
+freehand strokes and sticky notes. Typed text flows from page to page like in a word
+processor. Export gives you a flat PDF that looks the same everywhere.
 
-```
-bestNotes/
-├── README.md
-├── .gitignore
-└── BestNotes/                      # Xcode-Projektordner
-    ├── BestNotes.xcodeproj
-    └── BestNotes/                  # Target-Quellen (file-system-synchronized group)
-        ├── App/                    # Einstiegspunkt, Szenen, Menuebefehle, App-State
-        ├── Models/                 # SwiftData-Modelle + Notizbuch-Dokumentformat
-        ├── Features/
-        │   ├── Library/            # Sidebar: Ordner-/Notizbuchbaum        (Schritt 4)
-        │   ├── Tabs/               # Tab-Leiste fuer offene Dokumente      (Schritt 5)
-        │   ├── Viewer/             # PDF-Anzeige + Annotationswerkzeuge    (Schritt 2/3)
-        │   └── Editor/             # Textseiten, Bildplatzierung           (Schritt 7/8)
-        ├── PDFKitBridge/           # NSViewRepresentable-Wrapper, PDFView-Subklassen
-        ├── Services/               # Datei-I/O, Export, Thumbnails
-        ├── Support/                # Extensions, Hilfstypen, Konstanten
-        └── Assets.xcassets
-```
+There are no accounts and no cloud. Your library lives on your Mac and is saved
+automatically. Every notebook is a self-contained package that you can inspect in Finder.
 
-Das Xcode-Projekt nutzt eine *file-system-synchronized group* (`objectVersion = 77`).
-Neue Dateien und Ordner unter `BestNotes/BestNotes/` werden automatisch Teil des Targets —
-es muss nichts manuell in Xcode hinzugefuegt werden, und die `project.pbxproj` bleibt
-weitgehend merge-konfliktfrei.
+## Highlights
 
-Kehrseite: die Gruppe zieht *alle* Dateien ins Target, auch `.gitkeep`. Deshalb steht
-`EXCLUDED_SOURCE_FILE_NAMES = ".gitkeep"` in den Projekt-Build-Settings — sonst
-kollidieren gleichnamige Platzhalter beim Kopieren in `Contents/Resources`.
+- **Write across pages.** One continuous text flows over all blank pages. If it runs
+  past the last page, a new one is added. You get bold, italic, underline, font sizes,
+  paragraph alignment, and lined or grid paper.
+- **Annotate any PDF.** Highlight text, draw freehand, place sticky notes and erase,
+  each with full undo. Annotations are real PDF annotations, so other readers can see
+  them too.
+- **One kind of document.** An imported PDF behaves like any other notebook: you can
+  annotate it, add blank pages, write on them and export it.
+- **Images on the page.** Insert images through the file dialog or by drag & drop, then
+  move and resize them on the page. The original file is kept untouched.
+- **Clean PDF export.** Text, guide lines and images are burned into the pages. The
+  text stays real text, so searching and copying keep working.
+- **Library with tabs.** Folders and notebooks in a sidebar, several documents open in
+  tabs, and a home screen with recently opened documents.
+- **Never lose work.** Autosave three seconds after the last change, and again when you
+  close a tab, switch apps or quit. If saving fails, the document stays open.
 
----
+## Requirements
 
-## Architekturueberblick
+- macOS 15 or later
+- To build: Xcode 16 or later
 
-### 1. Schichten
+## Build from source
 
-```
-        SwiftUI (Chrome)                     AppKit/PDFKit (Canvas)
- ┌───────────────────────────────┐   ┌──────────────────────────────────┐
- │ Sidebar · Tab-Leiste          │   │ PDFView (Scroll, Zoom, Auswahl)  │
- │ Toolbar · Inspector · Dialoge │◄─►│ PDFAnnotation-Werkzeuge          │
- └───────────────────────────────┘   └──────────────────────────────────┘
-                 ▲                                   ▲
-                 │        DocumentSession            │
-                 └───────── (ObservableObject) ──────┘
-                                   │
-             ┌─────────────────────┴────────────────────┐
-             │                                          │
-   SwiftData (Bibliotheks-Index)            Dateisystem (.bestnote-Pakete, PDFs)
+```bash
+git clone https://github.com/schneider-leon/marginalia.git
+open marginalia/marginalia/marginalia.xcodeproj
 ```
 
-### 2. SwiftUI ↔ PDFKit
+In Xcode, select your own team under *Signing & Capabilities* (or "Sign to Run Locally").
+Then run the **marginalia** scheme (⌘R). The built app is called `marginalia.app`.
 
-`PDFView` ist eine `NSView` mit eigenem, imperativem Zustand (Scrollposition, Zoom,
-aktuelle Seite, Auswahl). Der Versuch, das deklarativ aus SwiftUI zu steuern, endet
-zuverlaessig in Update-Schleifen. Deshalb:
+The app runs in the App Sandbox. The library lives in the app's container under
+`~/Library/Containers/app.marginalia.macos/Data/Documents/Library`.
 
-- **`NSViewRepresentable` bleibt duenn.** `makeNSView` baut die `PDFView` einmal auf,
-  `updateNSView` gleicht nur wenige, explizit versionierte Werte ab (z. B. aktives
-  Werkzeug). Es wird nie das ganze `PDFDocument` neu gesetzt, solange es dasselbe ist.
-- **Der Zustand lebt in einer `DocumentSession`-Klasse** (`@Observable`), nicht in
-  `@State` der Wrapper-View. Die Session haelt `PDFDocument`, aktives Werkzeug,
-  Undo-Manager und Dirty-Flag. SwiftUI liest daraus; die `PDFView` schreibt darauf
-  ueber den `Coordinator`.
-- **Kommandos statt Bindings:** Aktionen wie „springe zu Seite 12“ oder „Zoom
-  zuruecksetzen“ laufen als imperative Methodenaufrufe auf der Session, die der
-  Coordinator an die `PDFView` weiterreicht — nicht als Zustandsdiffs.
-- **Eigene `PDFView`-Subklasse** fuer Maus-/Trackpad-Events der Annotationswerkzeuge
-  (Highlight ziehen, Freihandstrich). PDFKit bietet dafuer keine Hooks, also
-  `mouseDown/Dragged/Up` ueberschreiben und Punkte per `convert(_:to page:)` in
-  Seitenkoordinaten umrechnen.
-- Ein `PDFDocument` gehoert immer genau **einer** Session. Beim Tab-Wechsel wird die
-  `PDFView` nicht wiederverwendet, damit Zoom-/Scrollzustand pro Tab erhalten bleibt.
+To build and test from the command line:
 
-### 3. Es gibt nur eine Dokumentart
-
-**Jedes** Dokument in der Bibliothek ist ein `.bestnote`-Paket — auch eine
-importierte PDF. Die wandert beim Import unveraendert in `content.pdf`, ihre
-Seiten bekommen die Art `imported`, und danach verhaelt sie sich wie jedes
-andere Notizbuch: annotieren, leere Seiten anhaengen, beschreiben, exportieren.
-
-Der Grund ist nicht Sparsamkeit, sondern dass alles andere zwei Programme in
-einem Fenster ergibt. Sobald eine PDF *in* einem Notizbuch stecken darf, ist
-die Unterscheidung ohnehin hinfaellig — also gibt es sie gar nicht erst.
-`LibraryNode.Kind` unterscheidet nur noch das Symbol in der Sidebar.
-
-Aeltere Bibliotheken, in denen importierte PDFs als lose Datei lagen, werden
-beim ersten Oeffnen des Eintrags ueberfuehrt (`DocumentStore`).
-
-### 3c. Notizbuch-Datenformat (`.bestnote`)
-
-Ein Notizbuch ist ein **Paket** (Ordner mit `NSFileWrapper`, im Finder als eine Datei
-sichtbar):
-
-```
-Mathe-VL.bestnote/
-├── info.json          # Schemaversion, Titel, IDs, Seitenreihenfolge, Seitentypen
-├── content.pdf        # kanonischer Seitentraeger: importierte + leere Seiten
-├── body.rtf           # der durchlaufende Text des Notizbuchs
-├── overlays.json      # Bildplatzierungen pro Seite
-└── assets/            # eingefuegte Originalbilder (unveraendert)
+```bash
+xcodebuild -project marginalia/marginalia.xcodeproj -scheme marginalia -destination 'platform=macOS' build
+xcodebuild test -project marginalia/marginalia.xcodeproj -scheme marginalia -destination 'platform=macOS'
 ```
 
-Die Pakete liegen im Sandbox-Container unter `Documents/Library/<uuid>.bestnote`.
-Der Dateiname kommt aus der Notizbuch-ID, nicht aus dem Titel: Umbenennen soll
-keine Datei verschieben, und zwei gleichnamige Notizbuecher duerfen nebeneinander
-existieren. `.bestnote` ist in `Info.plist` als exportierter UTType deklariert und
-konform zu `com.apple.package` — der Finder zeigt das Verzeichnis als eine Datei.
+## Quick start
 
-Beide JSON-Dateien haben eine **explizit geschriebene** Kodierung: Swifts
-synthetisierte Enum-Form (`{"text": {"_0": …}}`) und `CGRect` als
-`[[x,y],[w,h]]` waeren beide schlecht les- und schlecht versionierbar.
-`OverlayContent` bekommt stattdessen einen `type`-Diskriminator, `frame` benannte
-Felder.
+1. Start marginalia. Click **+** in the sidebar to create a folder or a notebook, or press
+   `⌘O` to import a PDF.
+2. In **Write** mode, type on the page. Use the strip below the tab bar for formatting,
+   paper style and inserting pages or images.
+3. Switch to **Annotate** mode to highlight, draw or add sticky notes. Your typed text
+   stays visible and can be highlighted too.
+4. Press `⇧⌘E` to export the notebook as a PDF.
 
-**Warum ein Paket und nicht eine einzelne PDF?**
-Eine reine PDF koennte fast alles per PDF-Annotation abbilden, aber getippter Text
-waere dann in `FreeText`-Annotationen gefangen: kein sauberes Rich-Text-Modell, kein
-verlaessliches Reflow, und jeder externe PDF-Reader duerfte daran herumeditieren.
-Umgekehrt waere „alles in SwiftData/eine Datenbank“ teuer beim Import grosser PDFs
-und wuerde den Export zu einem vollstaendigen Neu-Rendering machen.
+| Shortcut      | Action                     | Shortcut      | Action                 |
+| ------------- | -------------------------- | ------------- | ---------------------- |
+| `⌘O`          | Import PDF                 | `⌘1`–`⌘9`     | Switch to tab          |
+| `⌘S`          | Save                       | `⇧⌘[` / `⇧⌘]` | Previous / next tab    |
+| `⇧⌘E`         | Export as PDF              | `⌘W`          | Close tab              |
+| `⌘Z` / `⇧⌘Z`  | Undo / redo                | `⌘+` / `⌘-`   | Zoom in / out          |
+| `⌃1`–`⌃5`     | Select, highlight, freehand, note, eraser | `⌘0` | Fit to window width |
+| `⌃⌘S`         | Show / hide library        | `⌥⌘↑` / `⌥⌘↓` | Previous / next page   |
 
-Der Mittelweg: **`content.pdf` ist die Wahrheit ueber Seiten und Geometrie**,
-`overlays.json` ist die Wahrheit ueber alles, was noch editierbar bleiben soll.
+## The notebook format
 
-**Warum ein Paket und nicht eine Zip-Datei?** `NSFileWrapper` erlaubt inkrementelles
-Schreiben — beim Speichern wird nur der geaenderte Teilbaum ersetzt, statt ein
-100-MB-Archiv neu zu packen.
-
-**Warum ist der Import-PDF unveraendert eingebettet?** Beim Import wird die Datei
-byteweise kopiert, nicht neu encodiert: Textebene, Lesezeichen und Dateigroesse
-bleiben erhalten.
-
-### 3a. Getippter Text: ein Fluss ueber viele Seiten
-
-Ein Notizbuch hat **einen** Textspeicher, nicht pro Seite einen Kasten. Ein
-`NSTextStorage` laeuft ueber mehrere seitengrosse `NSTextContainer` an einem
-gemeinsamen `NSLayoutManager` — das Modell, mit dem Textverarbeitungen Seiten
-umbrechen. Wer auf Seite 2 eine Zeile einfuegt, schiebt den Rest ueber den
-Seitenrand auf Seite 3.
-
-Bewusst TextKit 1: mehrere Container an einem Layout-Manager sind dort der
-vorgesehene Weg, und derselbe Layout-Manager traegt beides — die Bearbeitung im
-`NSTextView` und das Zeichnen beim Export.
-
-Der Fluss laeuft nur ueber **leere** Seiten. Importierte PDF-Seiten haben keinen
-Container; der Text fliesst an ihnen vorbei zur naechsten leeren Seite. Laeuft er
-hinter die letzte Seite, waechst automatisch eine nach. Umgekehrt wird nie
-automatisch geloescht — eine Seite, die der Nutzer angelegt hat, verschwindet
-nicht von selbst.
-
-Folge daraus: eine *mitten* in den Fluss eingefuegte Seite bleibt nicht leer, der
-Text rueckt nach. Eine wirklich leere Seite bekommt man am Ende des Notizbuchs.
-
-### 3b. Bilder
-
-Bilder liegen als Overlay ueber der Seite, mit Rahmen in PDF-Punkten. Die
-Originaldatei wandert unveraendert nach `assets/`; `overlays.json` haelt nur
-Dateinamen, Rahmen und Deckkraft. Verschieben und Skalieren aendern also nie
-die Bilddaten.
-
-Die Bedienung sitzt in einer eigenen `NSView` **ueber** der Textansicht. Deren
-`hitTest` meldet sich nur fuer Punkte auf einem Bild oder einem Anfasser
-zustaendig und gibt sonst `nil` zurueck — der Klick faellt dann durch und landet
-im Text. Eine SwiftUI-Ueberlagerung koennte das nicht so genau trennen.
-
-Drops nimmt dagegen die *Hintergrund*ansicht entgegen, weil die immer getroffen
-wird. Damit Dateien nicht vorher in der Textansicht landen, nimmt die nur noch
-Text-Drops an.
-
-### 4. Zwei Arten von „Annotation“ — bewusst getrennt
-
-| | Speicherung | Warum |
-|---|---|---|
-| Highlight, Freihand, Notizzettel auf PDF-Seiten | echte `PDFAnnotation` in `content.pdf` | PDFKit kann das nativ, ist standardkonform und ueberlebt den Export ohne Zutun |
-| Getippter Fliesstext | `body.rtf` + Layout zur Laufzeit | bleibt beliebig editierbar und umbruchfaehig; wird beim Export ins PDF **eingebrannt** |
-| Platzierte Bilder | `overlays.json` + Originaldatei in `assets/` | bleibt beliebig verschiebbar und skalierbar; wird beim Export ins PDF **eingebrannt** |
-
-Export = neues PDF-Dokument aufbauen: pro Seite erst die Originalseite samt ihrer
-PDF-Annotationen zeichnen, dann Hilfslinien und den Text dieser Seite darueber.
-Der Text wird dabei als **echter Text** gezeichnet, nicht als Bild — Suchen und
-Kopieren funktionieren im Ergebnis weiter. Die Arbeitskopie im Paket bleibt
-editierbar.
-
-### 5. SwiftData ist der Index, nicht der Speicher
-
-`LibraryEntry` haelt nur die Bibliotheksstruktur: Name, Art, Ordnung, Elternschaft,
-Zeitstempel. Der Inhalt bleibt im Dateisystem. Damit kostet eine kaputte oder
-migrierte Datenbank nie Notizen.
-
-Referenziert wird ueber die **`id` des Eintrags**, nicht ueber gespeicherte Pfade:
-ein Eintrag findet seine Datei als `Library/<id>.bestnote` bzw. `Library/<id>.pdf`.
-Keine Bookmarks, keine toten Pfade.
-
-**Importierte PDFs werden kopiert, nicht verknuepft.** Die Bibliothek besitzt ihre
-Dokumente selbst. Das erspart security-scoped bookmarks samt Entitlement, ueberlebt
-Verschieben und Umbenennen des Originals, und Annotationen landen in der Kopie statt
-in der Datei des Nutzers. Preis: doppelter Speicherplatz.
-
-`LibraryStore` ist die Fassade davor und liefert den Views weiterhin nur einen Baum
-aus `LibraryNode`-Werttypen — die Sidebar aus Schritt 4 blieb unveraendert.
-
----
-
-## Stand / Roadmap
-
-| Schritt | Inhalt | Status |
-|---|---|---|
-| 1 | Projekt-Setup, Struktur, Git, README | ✅ |
-| 2 | Minimaler PDF-Viewer (laden, anzeigen, Zoom/Scroll) | ✅ |
-| 3 | Annotationen: Highlight, Freihand, Textkommentar + Export | ✅ |
-| 4 | Sidebar mit Ordnerbaum (Dummy-Daten) | ✅ |
-| 5 | Tab-Leiste fuer mehrere offene Dokumente | ✅ |
-| 6a | `.bestnote`-Format: Lesen, Schreiben, Reparatur | ✅ |
-| 6b | SwiftData-Bibliothek, Notizbuecher in der Sidebar | ✅ |
-| 7 | Leere Seiten, durchlaufender Text, Einbrennen beim Export | ✅ |
-| 8 | Bilder einfuegen (Drag & Drop / Dateiauswahl) | ✅ |
-| 9 | Autosicherung, Fehlerbehandlung, Testtarget | ✅ |
-
-## Tastenkuerzel
-
-| Kuerzel | Aktion |
-|---|---|
-| ⌘O | PDF importieren |
-| ⌘S / ⇧⌘E | Sichern / als PDF exportieren |
-| ⌘Z / ⇧⌘Z | Widerrufen / Wiederholen |
-| ⌃1–⌃5 | Werkzeug: Auswahl, Markieren, Freihand, Kommentar, Radierer |
-| ⌘1–⌘9 | Tab wechseln |
-| ⇧⌘[ / ⇧⌘] | Vorheriger / naechster Tab |
-| ⌘W | Tab schliessen |
-| ⌘+ / ⌘- / ⌘0 | Zoom |
-| ⌥⌘↑ / ⌥⌘↓ | Seite zurueck / vor |
-
-### 5a. Eine Fensterleiste fuer beide Modi
-
-`DocumentToolbarContent` ist ein `ToolbarContent` und existiert genau einmal.
-PDF-Ansicht und Schreibmodus reichen nur ihre eigenen Werte hinein — dadurch
-koennen die Leisten nicht auseinanderlaufen. Der Schreibmodus kennt deshalb
-auch dieselben Anzeigemodi (Einzelseite, fortlaufend, Doppelseite); die
-Seitenaufteilung dafuer steckt in `PageLayout` und ist einzeln getestet.
-
-Seitenzahl und Gesamtzahl liegen in *einem* Rahmen. Als zwei nebeneinander
-gestellte Elemente verteilt die Fensterleiste den Platz zwischen ihnen, und
-„von N“ rutscht nach rechts weg.
-
-### 6. Sichern passiert von selbst
-
-Jede Aenderung stoesst eine Autosicherung an, die drei Sekunden nach der
-letzten Eingabe schreibt. Zusaetzlich wird beim Schliessen eines Tabs, beim
-Wegklicken der App und beim Beenden gesichert.
-
-Nachgefragt wird nur noch, wenn das Sichern *scheitert* — dann bleibt das
-Dokument offen, statt die Aenderungen stillschweigend fallenzulassen. Eine
-stumm scheiternde Autosicherung waere die schlechteste aller Varianten.
-
-Verwaiste Bilddateien werden beim **Oeffnen** entfernt, nicht beim Sichern:
-waehrend einer Sitzung kann ein Undo ein geloeschtes Bild zurueckholen, und
-dann muss die Datei noch da sein. Beim Oeffnen ist der Undo-Stapel leer.
-
----
-
-## Build & Tests
+Every document in the library is a `.marginalia` package: a folder that Finder shows as
+a single file.
 
 ```
-xcodebuild -project BestNotes/BestNotes.xcodeproj -scheme BestNotes -destination 'platform=macOS' build
+Lecture.marginalia/
+  info.json       schema version, title, page order and page kinds
+  content.pdf     the pages: imported and blank, plus their PDF annotations
+  body.rtf        the continuous typed text
+  overlays.json   image placements per page
+  assets/         inserted images, byte for byte
 ```
 
+- **`content.pdf` is the truth about pages and geometry. `body.rtf` and `overlays.json`
+  hold everything that stays editable.** Typed text is not stored as FreeText
+  annotations. That would rule out reflow, and any external PDF reader could edit it.
+- Packages are named after the notebook's ID, not its title. Renaming never moves a
+  file, and two notebooks may share a name.
+- Both JSON files use hand-written, readable encodings with a `type` discriminator and
+  named frame fields. Newer schema versions are rejected instead of being overwritten.
+  Small inconsistencies, such as missing page descriptions, are repaired when the
+  notebook opens.
+- Writes go to a staging folder first, then replace the package. An unchanged
+  `content.pdf` is hard-linked instead of rewritten.
+
+## Architecture
+
 ```
-xcodebuild test -project BestNotes/BestNotes.xcodeproj -scheme BestNotes -destination 'platform=macOS'
+marginalia/
+  marginalia/
+    App/            MarginaliaApp (scene, SwiftData container), RootView, menu commands
+    Models/         LibraryEntry (SwiftData index), LibraryNode, NotebookInfo,
+                    NotebookOverlay, AnnotationTool
+    Features/
+      Library/      LibraryStore (facade over SwiftData), sidebar, home screen
+      Tabs/         TabsStore, tab bar
+      Viewer/       DocumentSession (state of one open document), PDF view chrome,
+                    toolbars
+      Editor/       writing mode: text engine, page views, image overlays
+    PDFKitBridge/   NSViewRepresentable, PDFView subclass for the annotation tools,
+                    sticky note editor
+    Services/       NotebookPackage (read/write), renderer, importer, export,
+                    thumbnails
+    Support/        UTType, focused values, shared appearance
+  marginaliaTests/  unit tests; fixtures are generated with CoreText at runtime
+  Design/           app icon source (SVG) and export script
 ```
 
-In Xcode: ⌘U. Die Tests liegen im Target `BestNotesTests` und legen sich ihre
-Beispieldateien selbst an — PDF-Fixtures werden mit CoreText erzeugt, und die
-Bibliothek wird ueber `BESTNOTES_LIBRARY_ROOT` in einen Testordner umgelenkt,
-damit nichts im Container des Nutzers landet.
+| Concern                   | Approach                                                                  |
+| ------------------------- | ------------------------------------------------------------------------- |
+| Text across pages         | One `NSTextStorage` over many page-sized `NSTextContainer`s (TextKit 1)   |
+| Highlights, ink, notes    | Real `PDFAnnotation`s in `content.pdf`                                    |
+| Typed text and images     | Kept separate while editing, burned into the pages on export              |
+| SwiftUI ↔ PDFKit          | Thin `NSViewRepresentable`; imperative commands through a coordinator     |
+| Library                   | SwiftData as an index only; documents are files found by ID               |
+| Imported PDFs             | Copied into the library, never linked; the original is never touched      |
+| Both modes                | One window toolbar, one zoom value and one current page shared by both    |
 
-Zwei Fallen, auf die die Tests selbst schon hereingefallen sind und die
-`TestSupport` deshalb ausdruecklich behandelt:
+SwiftData stores only the library structure (names, folders, order, timestamps). A
+broken or migrated database never costs notes, because the content lives in the
+packages next to it.
 
-- Eine `PDFPage` ohne lebendes `PDFDocument` rendert leer. Hilfsfunktionen
-  nehmen daher immer das Dokument entgegen, nie nur die Seite.
-- Ausserhalb eines Runloops schliesst der `UndoManager` seine automatischen
-  Gruppen nie — Tests gruppieren von Hand.
+## Use of AI
+
+marginalia was developed with the help of AI coding assistants, including Claude Code.
+
+## License
+
+[MIT](LICENSE)
